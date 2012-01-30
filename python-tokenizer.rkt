@@ -1,14 +1,18 @@
-#lang racket/base
+#lang at-exp racket/base
 
 ;; This is a translation of the tokenizer.py library from Python.
+;; 
+;; Translation by Danny Yoo (dyoo@hashcollision.org)
 ;;
 ;; See:
 ;;
-;; http://hg.python.org/cpython/file/2.7/Lib/tokenize.py
+;;     http://hg.python.org/cpython/file/2.7/Lib/tokenize.py
+;;
 
 (require racket/generator
          racket/list
          racket/sequence
+         racket/string
          data/gvector
          (for-syntax racket/base)
          (only-in srfi/13 string-trim-right)
@@ -21,27 +25,23 @@
 ;; We define a few macros here to help port the code over.
 ;;
 ;; The more significant one, the while loop macro, I've put in a
-;; separate file "while-loop.rkt".  Here are a few miscellaneous
-;; macros:
+;; separate file "while-loop.rkt".
 
+;; Here are a few miscellaneous macros:
+;;
 
-;; The original Python library uses mutation heavily.
-;; As such, we'll extend the syntax of this file so that variable mutation 
-;; (set!) is shorter to write, supports chaining, and whose result
-;; is the rhs value.
-(define-syntax (<- stx)
+;; set! multiple identifiers at once.
+(define-syntax (set!* stx)
   (syntax-case stx ()
     [(= id1 id-rest ... val) 
      (andmap identifier? (syntax->list #'(id1 id-rest ...)))
      (syntax/loc stx
        (let ([v val])
          (set! id1 v)
-         (set! id-rest v) ...
-         v))]))
-
+         (set! id-rest v) ...))]))
 
 ;; Since there's quite a bit of mutative variable
-;; incrementing, we provide a small syntax for this.
+;; incrementing and decrementing, we can provide a small syntax for this.
 (define-syntax (++ stx)
   (syntax-case stx ()
     [(_ id)
@@ -49,6 +49,13 @@
      (syntax/loc stx
        (set! id (add1 id)))]))
 
+(define-syntax (-- stx)
+  (syntax-case stx ()
+    [(_ id)
+     (identifier? #'id)
+     (syntax/loc stx
+       (set! id (sub1 id)))]))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 (define tabsize 8)
@@ -101,7 +108,9 @@
     (return #f)))
 
 
-;; What are our token types?  Here they are:
+;; What are our token types?
+;; In the original Python sources, they were integers
+;; Here, we'll use symbols.
 (define NAME 'NAME)
 (define NUMBER 'NUMBER)
 (define STRING 'STRING)
@@ -111,6 +120,81 @@
 (define INDENT 'INDENT)
 (define ERRORTOKEN 'ERRORTOKEN)
 (define ENDMARKER 'ENDMARKER)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Regular expression stuff
+
+(define (group . choices)
+  (string-append "(" (string-join choices "|") ")"))
+
+(define (any . choices)
+  (string-append (apply group choices) "*"))
+
+(define (maybe . choices)
+  (string-append (apply group choices) "?"))
+
+
+
+;; We'll use @-reader support to get equivalent functionality to
+;; Python's raw strings.
+;; See: http://jarnaldich.me/2011/08/07/raw-strings-in-racket.html
+;; for a discussion.
+(define r string-append)
+
+
+
+(define Whitespace @r{[ \f\t]*})
+
+(define Comment @r{#[^\r\n]*})
+(define Name @r{[a-zA-Z_]\w*})
+(define Triple (group @r{[uU]?[rR]?'''}
+                      @r{[uU]?[rR]?"""}))
+
+(define Hexnumber @r{0[xX][\da-fA-F]+[lL]?})
+(define Octnumber @r{(0[oO][0-7]+)|(0[0-7]*)[lL]?})
+(define Binnumber @r{0[bB][01]+[lL]?})
+(define Decnumber @r{[1-9]\d*[lL]?})
+
+(define Intnumber (group Hexnumber Binnumber Octnumber Decnumber))
+
+(define Exponent  @r{[eE][-+]?\d+})
+
+(define Pointfloat (string-append
+                    (group @r{\d+\.\d*} @r{\.\d+}) 
+                    (maybe Exponent)))
+
+(define Expfloat (string-append @r{\d+} Exponent))
+
+(define Floatnumber (group Pointfloat Expfloat))
+
+(define Imagnumber (group @r{\d+[jJ]}
+                          (string-append Floatnumber @r{[jJ]})))
+
+(define Number (group Imagnumber Floatnumber Intnumber))
+
+(define Operator (group @r{\*\*=?} @r{>>=?} @r{<<=?} @r{<>} @r{!=}
+                        @r{//=?}
+                        @r{[+\-*/%&|^=<>]=?}
+                        @r{~}))
+
+(define Bracket "[][(){}]")
+(define Special (group @r{\r?\n}
+                       @r|{[:;.,`@]}|))
+
+(define Funny (group Operator Bracket Special))
+
+(define ContStr (group (string-append @r{[uU]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*}
+                                      (group "'" @r{\\\r?\n}))
+                       (string-append @r{[uU]?[rR]?"[^\n"\\]*(?:\\.[^\n"\\]*)*}
+                                      (group @r{"}  @r{\\\r?\n}))))
+
+(define PseudoExtras (group @r{\\\r?\n} Comment Triple))
+
+(define PseudoToken 
+  (string-append Whitespace (group PseudoExtras Number Funny ContStr Name)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 
 
@@ -130,145 +214,144 @@
   
   (in-generator
     
-    ;; The idiom for reading from a sequence in Racket doesn't use
-    ;; "it's easier to ask forgiveness than permission".
-    (define-values (read-line-not-exhausted? read-line) 
-      (sequence-generate line-sequence))
-    
-    (define lnum 0)
-    (define strstart (list 0 0))
-    (define start 0)
-    (define end 0)
-    (define pos #f)
-    (define max #f)
-    (define column 0)
-    (define parenlev 0)
-    (define continued? #f)
-    (define namechars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-    (define numchars "0123456789")
-    (define contstr "")
-    (define needcont? #f)
-    (define contline #f)
-    (define indents (gvector 0))
-    (define line "")
-    (define endprog #px"")
-    
-    (while #t                          ;; loop over lines in stream
-           (if (read-line-not-exhausted?)
-               (<- line (read-line))
-               (<- line ""))
-           (++ lnum)
-           (<- pos 0)
-           (<- max (string-length line))
-
-           (cond 
-             [(> (string-length contstr) 0)                  ;; continued string
-              (when (string=? line "")
-                (raise (exn:fail:token "EOF in multi-line string")
-                       (current-continuation-marks)
-                       strstart))
-              ;; Note: endprog must anchor the match with "^" or else
-              ;; this does not have equivalent behavior to Python!
-              (define endmatch (regexp-match-positions endprog line))
-              (cond
-                [endmatch
-                 (<- pos end 
-                     (cdr (first endmatch)))
-                 (yield STRING
-                        (string-append contstr (substring line 0 end))
-                        strstart
-                        (list lnum end)
-                        (string-append contline  line))
-                 (<- contstr "")
-                 (<- needcont? #f)
-                 (<- contline #f)]
-                
-                [(and needcont?
-                      (not (string=? (slice-end line 2) "\\\n"))
-                      (not (string=? (slice-end line 3) "\\\r\n")))
-                 (yield ERRORTOKEN
-                        (string-append contstr line)
-                        strstart
-                        (list lnum (string-length line))
-                        contline)
-                 (<- contstr "")
-                 (<- contline #f)
-                 (continue)]
-                
-                [else
-                 (<- contstr (string-append contstr line))
-                 (<- contline (string-append contline line))
-                 (continue)])]
-             
-             [(and (= parenlev 0)
-                   (not continued?))                    ;; new statement
-              (when (string=? line "")
-                (break))
-              (<- column 0)
-              (while (< pos max)                        ;; measure leading whitespace
-                     (cond
-                       [(char=? (string-ref line pos) #\space)
-                        (++ column)]
-                       [(char=? (string-ref line pos) #\tab)
-                        (<- column (* tabsize (add1 (quotient column tabsize))))]
-                       [(char=? (string-ref line pos) #\page)
-                        (<- column 0)]
-                       [else
-                        (break)])
-                     (++ pos))
-              (when (= pos max)
-                (break))
-
-              (when (member (string-ref line pos) (list #\# #\return #\newline))
-                (cond
-                  [(char=? (string-ref line pos) #\#)
-                   (define comment-token (rstrip-newlines (substring line pos)))
-                   (define nl-pos (+ pos (string-length comment-token)))
-                   (yield COMMENT
-                          comment-token
-                          (list lnum pos)
-                          (list lnum (+ pos (string-length comment-token)))
-                          line)
-                   (yield NL
-                          (substring line nl-pos)
-                          (list lnum nl-pos)
-                          (list lnum (string-length line))
-                          line)]
-                  [else
-                   (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
-                          (string-ref line pos)
-                          (list lnum pos)
-                          (list lnum (string-length line))
-                          line)])
-                (continue))
-                
-              (when (> column (gvector-last indents))  ;; count indents or dedents
-                (gvector-add! indents column)
-                (yield INDENT
-                       (string-ref line 0 pos)
-                       (list lnum 0)
-                       (list lnum pos)
-                       line))
-              (while (< column (gvector-last indents))
-                (unless (gvector-member column indents)
-                  (raise (exn:fail:indentation "unindent does not match any outer indentation level"
-                                               (current-continuation-marks)
-                                                (list "<tokenize>" lnum pos line)))
-                  (gvector-pop! indents)
-                  (yield DEDENT 
-                         ""
-                         (list lnum pos)
-                         (list lnum pos)
-                         line)))]
-
-             [else                                     ;; continued statement
-              (if (= (string-length line) 0)
-                  (raise (exn:fail:token "EOF in multi-line statement" 
+   ;; The idiom for reading from a sequence in Racket doesn't use
+   ;; "it's easier to ask forgiveness than permission".
+   (define-values (read-line-not-exhausted? read-line) 
+     (sequence-generate line-sequence))
+   
+   (define lnum 0)
+   (define strstart (list 0 0))
+   (define start 0)
+   (define end 0)
+   (define pos #f)
+   (define max #f)
+   (define column 0)
+   (define parenlev 0)
+   (define continued? #f)
+   (define namechars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+   (define numchars "0123456789")
+   (define contstr "")
+   (define needcont? #f)
+   (define contline #f)
+   (define indents (gvector 0))
+   (define line "")
+   (define endprog #px"")
+   
+   (while #t                          ;; loop over lines in stream
+     (if (read-line-not-exhausted?) (set! line (read-line)) (set! line ""))
+     (++ lnum)
+     (set! pos 0)
+     (set! max (string-length line))
+     
+     (cond 
+       [(> (string-length contstr) 0)                  ;; continued string
+        (when (string=? line "")
+          (raise (exn:fail:token "EOF in multi-line string")
+                 (current-continuation-marks)
+                 strstart))
+        ;; Note: endprog must anchor the match with "^" or else
+        ;; this does not have equivalent behavior to Python!
+        (define endmatch (regexp-match-positions endprog line))
+        (cond
+          [endmatch
+           (set!* pos end 
+                  (cdr (first endmatch)))
+           (yield STRING
+                  (string-append contstr (substring line 0 end))
+                  strstart
+                  (list lnum end)
+                  (string-append contline  line))
+           (set! contstr "")
+           (set! needcont? #f)
+           (set! contline #f)]
+          
+          [(and needcont?
+                (not (string=? (slice-end line 2) "\\\n"))
+                (not (string=? (slice-end line 3) "\\\r\n")))
+           (yield ERRORTOKEN
+                  (string-append contstr line)
+                  strstart
+                  (list lnum (string-length line))
+                  contline)
+           (set! contstr "")
+           (set! contline #f)
+           (continue)]
+          
+          [else
+           (set! contstr (string-append contstr line))
+           (set! contline (string-append contline line))
+           (continue)])]
+       
+       [(and (= parenlev 0)
+             (not continued?))                    ;; new statement
+        (when (string=? line "")
+          (break))
+        (set! column 0)
+        (while (< pos max)                        ;; measure leading whitespace
+          (cond
+            [(char=? (string-ref line pos) #\space)
+             (++ column)]
+            [(char=? (string-ref line pos) #\tab)
+             (set! column (* tabsize (add1 (quotient column tabsize))))]
+            [(char=? (string-ref line pos) #\page)
+             (set! column 0)]
+            [else
+             (break)])
+          (++ pos))
+        (when (= pos max)
+          (break))
+        
+        (when (member (string-ref line pos) (list #\# #\return #\newline))
+          (cond
+            [(char=? (string-ref line pos) #\#)
+             (define comment-token (rstrip-newlines (substring line pos)))
+             (define nl-pos (+ pos (string-length comment-token)))
+             (yield COMMENT
+                    comment-token
+                    (list lnum pos)
+                    (list lnum (+ pos (string-length comment-token)))
+                    line)
+             (yield NL
+                    (substring line nl-pos)
+                    (list lnum nl-pos)
+                    (list lnum (string-length line))
+                    line)]
+            [else
+             (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
+                    (string-ref line pos)
+                    (list lnum pos)
+                    (list lnum (string-length line))
+                    line)])
+          (continue))
+        
+        (when (> column (gvector-last indents))  ;; count indents or dedents
+          (gvector-add! indents column)
+          (yield INDENT
+                 (string-ref line 0 pos)
+                 (list lnum 0)
+                 (list lnum pos)
+                 line))
+        (while (< column (gvector-last indents))
+          (unless (gvector-member column indents)
+            (raise (exn:fail:indentation "unindent does not match any outer indentation level"
                                          (current-continuation-marks)
-                                         (list lnum 0)))
-                  (set! continued? #f))])
-;   359 
-;   360         while pos < max:
+                                         (list "<tokenize>" lnum pos line)))
+            (gvector-pop! indents)
+            (yield DEDENT 
+                   ""
+                   (list lnum pos)
+                   (list lnum pos)
+                   line)))]
+       
+       [else                                     ;; continued statement
+        (if (= (string-length line) 0)
+            (raise (exn:fail:token "EOF in multi-line statement" 
+                                   (current-continuation-marks)
+                                   (list lnum 0)))
+            (set! continued? #f))])
+     
+     (while (< pos max)
+       (void)
 ;   361             pseudomatch = pseudoprog.match(line, pos)
 ;   362             if pseudomatch:                                # scan for tokens
 ;   363                 start, end = pseudomatch.span(1)
@@ -322,15 +405,16 @@
 ;   411                 yield (ERRORTOKEN, line[pos],
 ;   412                            (lnum, pos), (lnum, pos+1), line)
 ;   413                 pos += 1
-;   414 
-           (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
-             (yield DEDENT
-                    ""
-                    (list lnum 0)
-                    (list lnum 0)
-                    ""))
-           (yield ENDMARKER
-                  ""
-                  (list lnum 0)
-                  (list lnum 0)
-                  ""))))
+       )
+     
+     (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
+       (yield DEDENT
+              ""
+              (list lnum 0)
+              (list lnum 0)
+              ""))
+     (yield ENDMARKER
+            ""
+            (list lnum 0)
+            (list lnum 0)
+            ""))))

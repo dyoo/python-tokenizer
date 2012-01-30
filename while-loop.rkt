@@ -20,7 +20,13 @@
 
 (define-syntax (while stx)
   (syntax-case stx ()
+    [(_)
+     (raise-syntax-error #f "missing test and body" stx)]
     [(_ cond body ...)
+     (begin
+       ;; When the body is empty, let's raise a syntactic error.
+       (when (null? (syntax->list #'(body ...)))
+         (raise-syntax-error #f "empty body" stx))
      #'(call/ec (λ (fresh-break)
                   (syntax-parameterize ([break (make-rename-transformer #'fresh-break)])
                     (letrec ([loop (lambda ()
@@ -31,4 +37,4 @@
                                                     (begin body ...))))
                                        (loop)))])
                       
-                      (loop)))))]))
+                      (loop))))))]))
