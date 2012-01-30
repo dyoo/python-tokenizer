@@ -17,7 +17,7 @@
          racket/string
          data/gvector
          (for-syntax racket/base)
-         "while-loop.rkt")
+         (planet dyoo/while-loop))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
