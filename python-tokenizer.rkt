@@ -57,7 +57,7 @@
 ;; Token errors will be exceptions:
 (define-struct (exn:fail:token exn:fail) (loc))
 ;; As will indentation errors:
-(define-struct (exn:fail:indentation exn:fail) ())
+(define-struct (exn:fail:indentation exn:fail) (loc))
 
 
 ;; string-right-ref: string number -> char
@@ -90,6 +90,15 @@
 (define (gvector-last gv)
   (define last-index (sub1 (gvector-count gv)))
   (gvector-ref gv last-index))
+
+
+;; gvector-member: X (gvectorof X) -> boolean
+(define (gvector-member x gv)
+  (let/ec return
+    (for ([elt (in-gvector gv)])
+      (when (equal? x elt)
+        (return #t)))
+    (return #f)))
 
 
 ;; What are our token types?  Here they are:
@@ -240,14 +249,17 @@
                        (list lnum 0)
                        (list lnum pos)
                        line))
-;   347             while column < indents[-1]:
-;   348                 if column not in indents:
-;   349                     raise IndentationError(
-;   350                         "unindent does not match any outer indentation level",
-;   351                         ("<tokenize>", lnum, pos, line))
-;   352                 indents = indents[:-1]
-;   353                 yield (DEDENT, '', (lnum, pos), (lnum, pos), line)
-              ]
+              (while (< column (gvector-last indents))
+                (unless (gvector-member column indents)
+                  (raise (exn:fail:indentation "unindent does not match any outer indentation level"
+                                               (current-continuation-marks)
+                                                (list "<tokenize>" lnum pos line)))
+                  (gvector-pop! indents)
+                  (yield DEDENT 
+                         ""
+                         (list lnum pos)
+                         (list lnum pos)
+                         line)))]
 
              [else                                     ;; continued statement
               (if (= (string-length line) 0)
