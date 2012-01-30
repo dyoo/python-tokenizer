@@ -8,7 +8,10 @@
 
 (require racket/generator
          racket/list
+         racket/sequence
+         data/gvector
          (for-syntax racket/base)
+         (only-in srfi/13 string-trim-right)
          "while-loop.rkt")
 
 
@@ -65,10 +68,24 @@
              (max (- (string-length str) n)
                   0)))
 
+;; rstrip-newlines: string -> string
+;; Trim off the newline characters off a string.
+(define (rstrip-newlines s)
+  (regexp-replace #px"[\r\n]+$" s ""))
 
-;; What are our token types?
-(define STRING 'string)
-(define ERRORTOKEN 'errortoken)
+
+
+;; What are our token types?  Here they are:
+(define NAME 'NAME)
+(define NUMBER 'NUMBER)
+(define STRING 'STRING)
+(define COMMENT 'COMMENT)
+(define NL 'NL)
+(define DEDENT 'DEDENT)
+(define INDENT 'INDENT)
+(define ERRORTOKEN 'ERRORTOKEN)
+(define ENDMARKER 'ENDMARKER)
+
 
 
 ;; generate-tokens: sequence -> sequence
@@ -84,6 +101,7 @@
         and the line on which the token was found. The line passed is the
         logical line; continuation lines are included.
   |#
+  
   (in-generator
     
     ;; The idiom for reading from a sequence in Racket doesn't use
@@ -105,7 +123,7 @@
     (define contstr "")
     (define needcont? #f)
     (define contline #f)
-    (define indents '(0))
+    (define indents (gvector 0))
     (define line "")
     (define endprog #px"")
     
@@ -123,6 +141,8 @@
                 (raise (exn:fail:token "EOF in multi-line string")
                        (current-continuation-marks)
                        strstart))
+              ;; Note: endprog must anchor the match with "^" or else
+              ;; this does not have equivalent behavior to Python!
               (define endmatch (regexp-match-positions endprog line))
               (cond
                 [endmatch
@@ -145,46 +165,57 @@
                         strstart
                         (list lnum (string-length line))
                         contline)
-                 (set! contstr "")
-                 (set! contline #f)
+                 (<- contstr "")
+                 (<- contline #f)
                  (continue)]
                 
                 [else
-                 (set! contstr (string-append contstr line))
-                 (set! contline (string-append contline line))
+                 (<- contstr (string-append contstr line))
+                 (<- contline (string-append contline line))
                  (continue)])]
              
              [(and (= parenlev 0)
                    (not continued?))                    ;; new statement
               (when (string=? line "")
                 (break))
-              (set! column 0)
+              (<- column 0)
               (while (< pos max)                        ;; measure leading whitespace
                      (cond
                        [(char=? (string-ref line pos) #\space)
                         (++ column)]
                        [(char=? (string-ref line pos) #\tab)
-                        (set! column (* tabsize (add1 (quotient column tabsize))))]
+                        (<- column (* tabsize (add1 (quotient column tabsize))))]
                        [(char=? (string-ref line pos) #\page)
-                        (set! column 0)]
+                        (<- column 0)]
                        [else
                         (break)])
                      (++ pos))
               (when (= pos max)
                 (break))
-;   330 
-;   331             if line[pos] in '#\r\n':           # skip comments or blank lines
-;   332                 if line[pos] == '#':
-;   333                     comment_token = line[pos:].rstrip('\r\n')
-;   334                     nl_pos = pos + len(comment_token)
-;   335                     yield (COMMENT, comment_token,
-;   336                            (lnum, pos), (lnum, pos + len(comment_token)), line)
-;   337                     yield (NL, line[nl_pos:],
-;   338                            (lnum, nl_pos), (lnum, len(line)), line)
-;   339                 else:
-;   340                     yield ((NL, COMMENT)[line[pos] == '#'], line[pos:],
-;   341                            (lnum, pos), (lnum, len(line)), line)
-;   342                 continue
+
+              (when (member (string-ref line pos) (list #\# #\return #\newline))
+                (cond
+                  [(char=? (string-ref line pos) #\#)
+                   (define comment-token (rstrip-newlines (substring line pos)))
+                   (define nl-pos (+ pos (string-length comment-token)))
+                   (yield COMMENT
+                          comment-token
+                          (list lnum pos)
+                          (list lnum (+ pos (string-length comment-token)))
+                          line)
+                   (yield NL
+                          (substring line nl-pos)
+                          (list lnum nl-pos)
+                          (list lnum (string-length line))
+                          line)]
+                  [else
+                   (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
+                          (string-ref line pos)
+                          (list lnum pos)
+                          (list lnum (string-length line))
+                          line)])
+                (continue))
+                
 ;   343 
 ;   344             if column > indents[-1]:           # count indents or dedents
 ;   345                 indents.append(column)
@@ -260,7 +291,14 @@
 ;   412                            (lnum, pos), (lnum, pos+1), line)
 ;   413                 pos += 1
 ;   414 
-;   415     for indent in indents[1:]:                 # pop remaining indent levels
-;   416         yield (DEDENT, '', (lnum, 0), (lnum, 0), '')
-;   417     yield (ENDMARKER, '', (lnum, 0), (lnum, 0), '')
-)))
+           (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
+             (yield DEDENT
+                    ""
+                    (list lnum 0)
+                    (list lnum 0)
+                    ""))
+           (yield ENDMARKER
+                  ""
+                  (list lnum 0)
+                  (list lnum 0)
+                  ""))))
