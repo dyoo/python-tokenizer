@@ -20,6 +20,30 @@
   (lambda (stx) 
     (raise-syntax-error #f "Used outside the context of a while body" stx)))
 
+;; This enforces the use of break and continue:
+;; you have to use them with parens, or else they should
+;; complain at compile time.
+(define-for-syntax (as-keyword b)
+  (lambda (stx)
+    (syntax-case stx ()
+      [(_)
+       (with-syntax ([b b])
+         (syntax/loc stx
+           (b)))]
+      [(kw arg arg-rest ...)
+       (raise-syntax-error #f
+                           (format "Must be directly used without arguments [e.g: (~a)]"
+                                   (syntax->datum #'kw))
+                           stx
+                           #'arg)]
+      [_
+       (identifier? stx)
+       (raise-syntax-error #f
+                           (format "Must be directly used [e.g: (~a)]"
+                                   (syntax->datum stx))
+                           stx)])))
+
+        
 (define-syntax (while stx)
   (syntax-case stx ()
     [(_)
@@ -35,8 +59,8 @@
            (when cond
              (let/ec fresh-continue
                (syntax-parameterize 
-                   ([break (make-rename-transformer #'fresh-break)]
-                    [continue (make-rename-transformer #'fresh-continue)])
+                   ([break (as-keyword #'fresh-break)]
+                    [continue (as-keyword #'fresh-continue)])
                  (begin body ...)))
              (loop)))))]))
 

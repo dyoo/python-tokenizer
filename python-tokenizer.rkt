@@ -264,7 +264,7 @@
 (define tabsize 8)
 
 
-;; Notes durin the translation of generate-tokens:
+;; Notes during the translation of generate-tokens:
 ;;
 ;; One of the nasty things is to see how much state's involved in
 ;; tokenization.  In the original sources, it's a bit hard to tell 
