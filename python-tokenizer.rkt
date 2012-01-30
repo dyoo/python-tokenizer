@@ -209,13 +209,13 @@
   (string-append Whitespace (group PseudoExtras Number Funny ContStr Name)))
 
 
-(define-values (tokenprog pseudoprog single3prog double3prog)
+#;(define-values (tokenprog pseudoprog single3prog double3prog)
   (apply values
          (map (lambda (x)
                 (pregexp x))
               (list Token PseudoToken Single3 Double3))))
 
-(define endprogs 
+#;(define endprogs 
   (hash @r{'} (pregexp Single)
         @r{"} (pregexp Double)
         @r{'''} single3prog
