@@ -60,6 +60,11 @@
 (define-struct (exn:fail:indentation exn:fail) ())
 
 
+;; string-right-ref: string number -> char
+;; Referencing characters from the right side.
+(define (string-right-ref str n)
+  (string-ref str (- (string-length str) n)))
+
 
 ;; slice-end: string number -> string
 ;; Slice the end of a string.
@@ -73,6 +78,18 @@
 (define (rstrip-newlines s)
   (regexp-replace #px"[\r\n]+$" s ""))
 
+;; gvector-pop!: (gvectorof X) -> X
+;; Remove the last element of the gvector and return it.
+(define (gvector-pop! gv)
+  (define last-index (sub1 (gvector-count gv)))
+  (define val (gvector-ref gv last-index))
+  (gvector-remove! gv last-index))
+
+
+;; gvector-last: (gvectorof X) -> X
+(define (gvector-last gv)
+  (define last-index (sub1 (gvector-count gv)))
+  (gvector-ref gv last-index))
 
 
 ;; What are our token types?  Here they are:
@@ -216,10 +233,13 @@
                           line)])
                 (continue))
                 
-;   343 
-;   344             if column > indents[-1]:           # count indents or dedents
-;   345                 indents.append(column)
-;   346                 yield (INDENT, line[:pos], (lnum, 0), (lnum, pos), line)
+              (when (> column (gvector-last indents))  ;; count indents or dedents
+                (gvector-add! indents column)
+                (yield INDENT
+                       (string-ref line 0 pos)
+                       (list lnum 0)
+                       (list lnum pos)
+                       line))
 ;   347             while column < indents[-1]:
 ;   348                 if column not in indents:
 ;   349                     raise IndentationError(
