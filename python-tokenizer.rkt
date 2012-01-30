@@ -178,8 +178,12 @@
 (define Double3 @r{[^"\\]*(?:(?:\\.|"(?!""))[^"\\]*)*"""})
 (define Triple (group @r{[uU]?[rR]?'''} @r{[uU]?[rR]?"""}))
 ;; Single-line ' or " string.
-(define String (group @r{[uU]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*'}
-                      @r{[uU]?[rR]?"[^\n"\\]*(?:\\.[^\n"\\]*)*"}))
+;;
+;; dyoo: Note that there's a little trickiness since the newline
+;; has to really be in the string (and not its raw-string equivalent).
+;; That's why the translation unescapes the newlines in the regexp group.
+(define String (group @r{[uU]?[rR]?'[^@r["\n"]'\\]*(?:\\.[^@r["\n"]'\\]*)*'}
+                      @r{[uU]?[rR]?"[^@r["\n"]"\\]*(?:\\.[^@r["\n"]"\\]*)*"}))
 
 
 ;; Because of leftmost-then-longest match semantics, be sure to put the
@@ -191,31 +195,31 @@
                         @r{~}))
 
 (define Bracket "[][(){}]")
-(define Special (group @r{\r?\n} @r|{[:;.,`@]}|))
+(define Special (group "\r?\n" @r|{[:;.,`@]}|))
 (define Funny (group Operator Bracket Special))
 
 (define PlainToken (group Number Funny String Name))
 (define Token (string-append Ignore PlainToken))
 
 ;;  First (or only) line of ' or " string.
-(define ContStr (group (string-append @r{[uU]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*}
-                                      (group "'" @r{\\\r?\n}))
-                       (string-append @r{[uU]?[rR]?"[^\n"\\]*(?:\\.[^\n"\\]*)*}
-                                      (group @r{"}  @r{\\\r?\n}))))
+(define ContStr (group (string-append @r{[uU]?[rR]?'[^@r["\n"]'\\]*(?:\\.[^@r["\n"]'\\]*)*}
+                                      (group "'" "\\\r?\n"))
+                       (string-append @r{[uU]?[rR]?"[^@r["\n"]"\\]*(?:\\.[^@r["\n"]"\\]*)*}
+                                      (group @r{"}  "\\\r?\n"))))
 
-(define PseudoExtras (group @r{\\\r?\n} Comment Triple))
+(define PseudoExtras (group "\\\r?\n" Comment Triple))
 
 (define PseudoToken 
   (string-append Whitespace (group PseudoExtras Number Funny ContStr Name)))
 
 
-#;(define-values (tokenprog pseudoprog single3prog double3prog)
+(define-values (tokenprog pseudoprog single3prog double3prog)
   (apply values
          (map (lambda (x)
                 (pregexp x))
               (list Token PseudoToken Single3 Double3))))
 
-#;(define endprogs 
+(define endprogs 
   (hash @r{'} (pregexp Single)
         @r{"} (pregexp Double)
         @r{'''} single3prog
