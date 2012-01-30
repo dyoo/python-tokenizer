@@ -8,6 +8,8 @@
 ;;
 ;;     http://hg.python.org/cpython/file/2.7/Lib/tokenize.py
 ;;
+;; for the original Python sources.
+
 
 (require racket/generator
          racket/list
@@ -15,7 +17,6 @@
          racket/string
          data/gvector
          (for-syntax racket/base)
-         (only-in srfi/13 string-trim-right)
          "while-loop.rkt")
 
 
@@ -58,7 +59,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
-(define tabsize 8)
 
 
 ;; Token errors will be exceptions:
@@ -123,7 +123,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Regular expression stuff
+;; Regular expression stuff.
 
 (define (group . choices)
   (string-append "(" (string-join choices "|") ")"))
@@ -139,51 +139,65 @@
 ;; We'll use @-reader support to get equivalent functionality to
 ;; Python's raw strings.
 ;; See: http://jarnaldich.me/2011/08/07/raw-strings-in-racket.html
-;; for a discussion.
+;; for a discussion.  Raw strings let us do the proper string escaping.
 (define r string-append)
 
 
 
-(define Whitespace @r{[ \f\t]*})
-
-(define Comment @r{#[^\r\n]*})
+(define Whitespace "[ \f\t]*")
+(define Comment "#[^\r\n]*")
+(define Ignore (string-append Whitespace 
+                              (any (string-append "\\\r?\n"  Whitespace))
+                              (maybe Comment)))
 (define Name @r{[a-zA-Z_]\w*})
-(define Triple (group @r{[uU]?[rR]?'''}
-                      @r{[uU]?[rR]?"""}))
 
 (define Hexnumber @r{0[xX][\da-fA-F]+[lL]?})
 (define Octnumber @r{(0[oO][0-7]+)|(0[0-7]*)[lL]?})
 (define Binnumber @r{0[bB][01]+[lL]?})
 (define Decnumber @r{[1-9]\d*[lL]?})
-
 (define Intnumber (group Hexnumber Binnumber Octnumber Decnumber))
-
 (define Exponent  @r{[eE][-+]?\d+})
-
 (define Pointfloat (string-append
                     (group @r{\d+\.\d*} @r{\.\d+}) 
                     (maybe Exponent)))
-
 (define Expfloat (string-append @r{\d+} Exponent))
-
 (define Floatnumber (group Pointfloat Expfloat))
-
 (define Imagnumber (group @r{\d+[jJ]}
                           (string-append Floatnumber @r{[jJ]})))
 
 (define Number (group Imagnumber Floatnumber Intnumber))
 
+
+;; Tail end of ' string.
+(define Single @r{[^'\\]*(?:\\.[^'\\]*)*'})
+;; Tail end of " string.
+(define Double @r{[^"\\]*(?:\\.[^"\\]*)*"})
+;; Tail end of ''' string.
+(define Single3 @r{[^'\\]*(?:(?:\\.|'(?!''))[^'\\]*)*'''})
+;; Tail end of """ string.
+(define Double3 @r{[^"\\]*(?:(?:\\.|"(?!""))[^"\\]*)*"""})
+(define Triple (group @r{[uU]?[rR]?'''} @r{[uU]?[rR]?"""}))
+;; Single-line ' or " string.
+(define String (group @r{[uU]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*'}
+                      @r{[uU]?[rR]?"[^\n"\\]*(?:\\.[^\n"\\]*)*"}))
+
+
+;; Because of leftmost-then-longest match semantics, be sure to put the
+;; longest operators first (e.g., if = came before ==, == would get
+;; recognized as two instances of =).
 (define Operator (group @r{\*\*=?} @r{>>=?} @r{<<=?} @r{<>} @r{!=}
                         @r{//=?}
                         @r{[+\-*/%&|^=<>]=?}
                         @r{~}))
 
 (define Bracket "[][(){}]")
-(define Special (group @r{\r?\n}
-                       @r|{[:;.,`@]}|))
-
+(define Special (group @r{\r?\n} @r|{[:;.,`@]}|))
 (define Funny (group Operator Bracket Special))
 
+(define PlainToken (group Number Funny String Name))
+(define Token (string-append Ignore PlainToken))
+
+;;  First (or only) line of ' or " string.
 (define ContStr (group (string-append @r{[uU]?[rR]?'[^\n'\\]*(?:\\.[^\n'\\]*)*}
                                       (group "'" @r{\\\r?\n}))
                        (string-append @r{[uU]?[rR]?"[^\n"\\]*(?:\\.[^\n"\\]*)*}
@@ -193,8 +207,64 @@
 
 (define PseudoToken 
   (string-append Whitespace (group PseudoExtras Number Funny ContStr Name)))
+
+
+(define-values (tokenprog pseudoprog single3prog double3prog)
+  (apply values
+         (map (lambda (x)
+                (pregexp x))
+              (list Token PseudoToken Single3 Double3))))
+
+(define endprogs 
+  (hash @r{'} (pregexp Single)
+        @r{"} (pregexp Double)
+        @r{'''} single3prog
+        @r{"""} double3prog
+        @r{'''} single3prog
+        @r{"""} double3prog
+        @r{u'''} single3prog
+        @r{u"""} double3prog
+        @r{ur'''} single3prog
+        @r{ur"""} double3prog
+        @r{R'''} single3prog
+        @r{R"""} double3prog
+        @r{U'''} single3prog
+        @r{U"""} double3prog
+        @r{uR'''} single3prog
+        @r{uR"""} double3prog
+        @r{Ur'''} single3prog
+        @r{Ur"""} double3prog
+        @r{UR'''} single3prog
+        @r{UR"""} double3prog
+        @r{b'''} single3prog
+        @r{b"""} double3prog
+        @r{br'''} single3prog
+        @r{br"""} double3prog
+        @r{B'''} single3prog
+        @r{B"""} double3prog
+        @r{bR'''} single3prog
+        @r{bR"""} double3prog
+        @r{Br'''} single3prog
+        @r{Br"""} double3prog
+        @r{BR'''} single3prog
+        @r{BR"""} double3prog
+        @r{r} #f
+        @r{R} #f
+        @r{u} #f
+        @r{U} #f
+        @r{b} #f
+        @r{B} #f))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+(define tabsize 8)
+
+
+;; Notes durin the translation of generate-tokens:
+;;
+;; One of the nasty things is to see how much state's involved in
+;; tokenization.  In the original sources, it's a bit hard to tell 
+;; what all the lexer's state is, since variables are function-scoped.
 
 
 
