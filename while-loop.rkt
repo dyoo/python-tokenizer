@@ -23,7 +23,7 @@
 ;; This enforces the use of break and continue:
 ;; you have to use them with parens, or else they should
 ;; complain at compile time.
-(define-for-syntax (as-keyword b)
+(define-for-syntax (force-use-with-parens b)
   (lambda (stx)
     (syntax-case stx ()
       [(_)
@@ -59,8 +59,8 @@
            (when cond
              (let/ec fresh-continue
                (syntax-parameterize 
-                   ([break (as-keyword #'fresh-break)]
-                    [continue (as-keyword #'fresh-continue)])
+                   ([break (force-use-with-parens #'fresh-break)]
+                    [continue (force-use-with-parens #'fresh-continue)])
                  (begin body ...)))
              (loop)))))]))
 
