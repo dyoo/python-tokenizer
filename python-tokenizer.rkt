@@ -85,13 +85,13 @@
 (define (rstrip-newlines s)
   (regexp-replace #px"[\r\n]+$" s ""))
 
-;; gvector-pop!: (gvectorof X) -> X
+;; my-gvector-pop!: (gvectorof X) -> X
 ;; Remove the last element of the gvector and return it.
-(define (gvector-pop! gv)
+(define (my-gvector-pop! gv)
   (define last-index (sub1 (gvector-count gv)))
   (define val (gvector-ref gv last-index))
-  (gvector-remove! gv last-index))
-
+  (gvector-remove! gv last-index)
+  val)
 
 ;; gvector-last: (gvectorof X) -> X
 (define (gvector-last gv)
@@ -216,12 +216,14 @@
 (define-values (tokenprog pseudoprog single3prog double3prog)
   (apply values
          (map (lambda (x)
-                (pregexp x))
+                ;; Slight change: explicitly adding the leading anchor
+                ;; to force matches at the beginning
+                (pregexp (string-append "^" x)))
               (list Token PseudoToken Single3 Double3))))
 
 (define endprogs 
-  (hash @r{'} (pregexp Single)
-        @r{"} (pregexp Double)
+  (hash @r{'} (pregexp (string-append "^" Single))
+        @r{"} (pregexp (string-append "^" Double))
         @r{'''} single3prog
         @r{"""} double3prog
         @r{'''} single3prog
@@ -324,7 +326,7 @@
                  (current-continuation-marks)
                  strstart))
         ;; Note: endprog must anchor the match with "^" or else
-        ;; this does not have equivalent behavior to Python!
+        ;; this does not have equivalent behavior to Python.
         (define endmatch (regexp-match-positions endprog line))
         (cond
           [endmatch
@@ -410,7 +412,7 @@
             (raise (exn:fail:indentation "unindent does not match any outer indentation level"
                                          (current-continuation-marks)
                                          (list "<tokenize>" lnum pos line)))
-            (gvector-pop! indents)
+            (my-gvector-pop! indents)
             (yield DEDENT 
                    ""
                    (list lnum pos)
@@ -426,12 +428,16 @@
      
      (while (< pos max)
        (void)
-;   361             pseudomatch = pseudoprog.match(line, pos)
-;   362             if pseudomatch:                                # scan for tokens
-;   363                 start, end = pseudomatch.span(1)
-;   364                 spos, epos, pos = (lnum, start), (lnum, end), end
-;   365                 token, initial = line[start:end], line[start]
-;   366 
+       (define pseudomatch (regexp-match-positions pseudoprog line pos))
+       (cond [pseudomatch                                  ;; scan for tokens
+              (set! start (car (first pseudomatch)))
+              (set! end (cdr (first pseudomatch)))
+              (define spos (list lnum start))
+              (define epos (list lnum end))
+              (set! pos end)
+              (define token (substring line start end))
+              (define initial (string-ref line start))
+              (cond
 ;   367                 if initial in numchars or \
 ;   368                    (initial == '.' and token != '.'):      # ordinary number
 ;   369                     yield (NUMBER, token, spos, epos, line)
@@ -475,11 +481,14 @@
 ;   407                     elif initial in ')]}':
 ;   408                         parenlev -= 1
 ;   409                     yield (OP, token, spos, epos, line)
-;   410             else:
-;   411                 yield (ERRORTOKEN, line[pos],
-;   412                            (lnum, pos), (lnum, pos+1), line)
-;   413                 pos += 1
-       )
+                )
+              ]
+             [else
+              (yield ERRORTOKEN
+                     (string-ref line pos)
+                     (list lnum pos)
+                     (list lnum (+ pos 1))
+                     line)]))
      
      (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
        (yield DEDENT
