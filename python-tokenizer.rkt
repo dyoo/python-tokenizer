@@ -114,6 +114,7 @@
 (define NAME 'NAME)
 (define NUMBER 'NUMBER)
 (define STRING 'STRING)
+(define OP 'OP)
 (define COMMENT 'COMMENT)
 (define NL 'NL)
 (define DEDENT 'DEDENT)
