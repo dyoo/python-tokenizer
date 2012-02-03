@@ -15,6 +15,7 @@
          racket/list
          racket/sequence
          racket/string
+         racket/set
          data/gvector
          (for-syntax racket/base)
          (planet dyoo/while-loop))
@@ -305,8 +306,10 @@
    (define column 0)
    (define parenlev 0)
    (define continued? #f)
-   (define namechars "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-   (define numchars "0123456789")
+   ;; Slight deviation: rather than represent namechars as a string, use a set.
+   (define namechars (apply set (string->list "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")))
+   ;; Slight deviation: rather than represent numchars as a string, use a set.
+   (define numchars (apply set (string->list "0123456789")))
    (define contstr "")
    (define needcont? #f)
    (define contline #f)
@@ -439,51 +442,55 @@
               (define token (substring line start end))
               (define initial (string-ref line start))
               (cond
-;   367                 if initial in numchars or \
-;   368                    (initial == '.' and token != '.'):      # ordinary number
-;   369                     yield (NUMBER, token, spos, epos, line)
-;   370                 elif initial in '\r\n':
-;   371                     yield (NL if parenlev > 0 else NEWLINE,
-;   372                            token, spos, epos, line)
-;   373                 elif initial == '#':
-;   374                     assert not token.endswith("\n")
-;   375                     yield (COMMENT, token, spos, epos, line)
-;   376                 elif token in triple_quoted:
-;   377                     endprog = endprogs[token]
-;   378                     endmatch = endprog.match(line, pos)
-;   379                     if endmatch:                           # all on one line
-;   380                         pos = endmatch.end(0)
-;   381                         token = line[start:pos]
-;   382                         yield (STRING, token, spos, (lnum, pos), line)
-;   383                     else:
-;   384                         strstart = (lnum, start)           # multiple lines
-;   385                         contstr = line[start:]
-;   386                         contline = line
-;   387                         break
-;   388                 elif initial in single_quoted or \
-;   389                     token[:2] in single_quoted or \
-;   390                     token[:3] in single_quoted:
-;   391                     if token[-1] == '\n':                  # continued string
-;   392                         strstart = (lnum, start)
-;   393                         endprog = (endprogs[initial] or endprogs[token[1]] or
-;   394                                    endprogs[token[2]])
-;   395                         contstr, needcont? = line[start:], true
-;   396                         contline = line
-;   397                         break
-;   398                     else:                                  # ordinary string
-;   399                         yield (STRING, token, spos, epos, line)
-;   400                 elif initial in namechars:                 # ordinary name
-;   401                     yield (NAME, token, spos, epos, line)
-;   402                 elif initial == '\\':                      # continued stmt
-;   403                     continued = 1
-;   404                 else:
-;   405                     if initial in '([{':
-;   406                         parenlev += 1
-;   407                     elif initial in ')]}':
-;   408                         parenlev -= 1
-;   409                     yield (OP, token, spos, epos, line)
-                )
-              ]
+                [(or (set-member? initial numchars)
+                     (and (char=? initial #\.) (not (string=? token "."))))      ;; ordinary number
+                 (yield NUMBER token spos epos line)]
+                [(or (char=? initial #\return) (char=? initial #\newline))
+                 (yield (if (> parenlev 0) NL NEWLINE)
+                        token spos epos line)]
+                [
+                 ;   373                 elif initial == '#':
+                 ;   374                     assert not token.endswith("\n")
+                 ;   375                     yield (COMMENT, token, spos, epos, line)
+                 ]
+                [
+                 ;   376                 elif token in triple_quoted:
+                 ;   377                     endprog = endprogs[token]
+                 ;   378                     endmatch = endprog.match(line, pos)
+                 ;   379                     if endmatch:                           # all on one line
+                 ;   380                         pos = endmatch.end(0)
+                 ;   381                         token = line[start:pos]
+                 ;   382                         yield (STRING, token, spos, (lnum, pos), line)
+                 ;   383                     else:
+                 ;   384                         strstart = (lnum, start)           # multiple lines
+                 ;   385                         contstr = line[start:]
+                 ;   386                         contline = line
+                 ;   387                         break
+                 ]
+                [
+                 ;   388                 elif initial in single_quoted or \
+                 ;   389                     token[:2] in single_quoted or \
+                 ;   390                     token[:3] in single_quoted:
+                 ;   391                     if token[-1] == '\n':                  # continued string
+                 ;   392                         strstart = (lnum, start)
+                 ;   393                         endprog = (endprogs[initial] or endprogs[token[1]] or
+                 ;   394                                    endprogs[token[2]])
+                 ;   395                         contstr, needcont? = line[start:], true
+                 ;   396                         contline = line
+                 ;   397                         break
+                 ;   398                     else:                                  # ordinary string
+                 ;   399                         yield (STRING, token, spos, epos, line)
+                 ]
+                [(set-member? initial namechars)                  ;; ordinary name
+                 (yield NAME token spos epos line)]               
+                [(char=? initial #\\)                             ;; continued stmt
+                 (set! continued #t)]
+                [else
+                 (cond [(or (char=? initial #\() (char=? initial #\[) (char=? initial #\{))
+                        (++ parenlev)]
+                       [(or (char=? initial #\)) (char=? initial #\]) (char=? initial #\}))
+                        (-- parenlev)])
+                 (yield OP token spos epos line)])]
              [else
               (yield ERRORTOKEN
                      (string-ref line pos)
