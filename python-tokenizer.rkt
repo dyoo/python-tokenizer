@@ -75,7 +75,7 @@
 
 
 ;; slice-end: string number -> string
-;; Slice the end of a string.
+;; Slice from the end of a string.
 (define (slice-end str n)
   (substring str
              (max (- (string-length str) n)
@@ -118,6 +118,7 @@
 (define OP 'OP)
 (define COMMENT 'COMMENT)
 (define NL 'NL)
+(define NEWLINE 'NEWLINE)
 (define DEDENT 'DEDENT)
 (define INDENT 'INDENT)
 (define ERRORTOKEN 'ERRORTOKEN)
@@ -262,6 +263,28 @@
         @r{U} #f
         @r{b} #f
         @r{B} #f))
+
+
+(define triple-quoted
+  (set "'''" @r{"""}
+       "r'''" @r{r"""} "R'''" @r{R"""}
+       "u'''" @r{u"""} "U'''" @r{U"""}
+       "ur'''" @r{ur"""} "Ur'''" @r{Ur"""}
+       "uR'''" @r{uR"""} "UR'''" @r{UR"""}
+       "b'''" @r{b"""} "B'''" @r{B"""}
+       "br'''" @r{br"""} "Br'''" @r{Br"""}
+       "bR'''" @r{bR"""} "BR'''" @r{BR"""}))
+
+(define single-quoted
+  (set "'" @r{"}
+       "r'" @r{r"} "R'" @r{R"}
+       "u'" @r{u"} "U'" @r{U"}
+       "ur'" @r{ur"} "Ur'" @r{Ur"}
+       "uR'" @r{uR"} "UR'" @r{UR"}
+       "b'" @r{b"} "B'" @r{B"}
+       "br'" @r{br"} "Br'" @r{Br"}
+       "bR'" @r{bR"} "BR'" @r{BR"}))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
@@ -448,26 +471,26 @@
                 [(or (char=? initial #\return) (char=? initial #\newline))
                  (yield (if (> parenlev 0) NL NEWLINE)
                         token spos epos line)]
-                [
-                 ;   373                 elif initial == '#':
-                 ;   374                     assert not token.endswith("\n")
-                 ;   375                     yield (COMMENT, token, spos, epos, line)
-                 ]
-                [
-                 ;   376                 elif token in triple_quoted:
-                 ;   377                     endprog = endprogs[token]
-                 ;   378                     endmatch = endprog.match(line, pos)
-                 ;   379                     if endmatch:                           # all on one line
-                 ;   380                         pos = endmatch.end(0)
-                 ;   381                         token = line[start:pos]
-                 ;   382                         yield (STRING, token, spos, (lnum, pos), line)
-                 ;   383                     else:
-                 ;   384                         strstart = (lnum, start)           # multiple lines
-                 ;   385                         contstr = line[start:]
-                 ;   386                         contline = line
-                 ;   387                         break
-                 ]
-                [
+                [(char=? initial #\#)
+                 (when (regexp-match #px"\n$" token)
+                   (error 'generate-tokens "Assertion error: token ends with newline"))
+                 (yield COMMENT token spos epos line)]
+                [(set-member? token triple-quoted)
+                 (set! endprog (hash-ref endprogs token))
+                 (define endmatch (regexp-match-positions endprog line pos))
+                 (cond
+                   [endmatch
+                    (set! pos (cdr (first endmatch)))
+                    (set! token (substring line start pos))
+                    (yield STRING token spos (list lnum pos) line)]
+                   [else
+                    (set! strstart (list lnum start))              ;; multiple lines
+                    (set! contstr (substring line start))
+                    (set! contline line)
+                    (break)])]
+                [(or (set-member? (string initial) single-quoted)
+                     (set-member? (slice-end token 2) single-quoted)
+                     (set-member? (slice-end token 3) single-quoted))
                  ;   388                 elif initial in single_quoted or \
                  ;   389                     token[:2] in single_quoted or \
                  ;   390                     token[:3] in single_quoted:
@@ -484,7 +507,7 @@
                 [(set-member? initial namechars)                  ;; ordinary name
                  (yield NAME token spos epos line)]               
                 [(char=? initial #\\)                             ;; continued stmt
-                 (set! continued #t)]
+                 (set! continued? #t)]
                 [else
                  (cond [(or (char=? initial #\() (char=? initial #\[) (char=? initial #\{))
                         (++ parenlev)]
