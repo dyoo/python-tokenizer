@@ -314,7 +314,7 @@
   |#
   
   (in-generator
-    
+   
    ;; The idiom for reading from a sequence in Racket doesn't use
    ;; "it's easier to ask forgiveness than permission".
    (define-values (read-line-not-exhausted? read-line) 
@@ -339,196 +339,200 @@
    (define indents (gvector 0))
    (define line "")
    (define endprog #px"")
-   
-   (while #t                          ;; loop over lines in stream
-     (if (read-line-not-exhausted?) (set! line (read-line)) (set! line ""))
-     (++ lnum)
-     (set! pos 0)
-     (set! max (string-length line))
+   (let ([yield (lambda args
+                  (yield args))])
      
-     (cond 
-       [(> (string-length contstr) 0)                  ;; continued string
-        (when (string=? line "")
-          (raise (exn:fail:token "EOF in multi-line string")
-                 (current-continuation-marks)
-                 strstart))
-        ;; Note: endprog must anchor the match with "^" or else
-        ;; this does not have equivalent behavior to Python.
-        (define endmatch (regexp-match-positions endprog line))
-        (cond
-          [endmatch
-           (set!* pos end 
-                  (cdr (first endmatch)))
-           (yield STRING
-                  (string-append contstr (substring line 0 end))
-                  strstart
-                  (list lnum end)
-                  (string-append contline  line))
-           (set! contstr "")
-           (set! needcont? #f)
-           (set! contline #f)]
-          
-          [(and needcont?
-                (not (string=? (slice-end line 2) "\\\n"))
-                (not (string=? (slice-end line 3) "\\\r\n")))
-           (yield ERRORTOKEN
-                  (string-append contstr line)
-                  strstart
-                  (list lnum (string-length line))
-                  contline)
-           (set! contstr "")
-           (set! contline #f)
-           (continue)]
-          
-          [else
-           (set! contstr (string-append contstr line))
-           (set! contline (string-append contline line))
-           (continue)])]
+     (while #t                          ;; loop over lines in stream
+       (if (read-line-not-exhausted?) 
+           (set! line (string-append (read-line) "\n")) ;; Racket's read-line does not include the newline character
+           (set! line ""))
+       (++ lnum)
+       (set! pos 0)
+       (set! max (string-length line))
        
-       [(and (= parenlev 0)
-             (not continued?))                    ;; new statement
-        (when (string=? line "")
-          (break))
-        (set! column 0)
-        (while (< pos max)                        ;; measure leading whitespace
+       (cond 
+         [(> (string-length contstr) 0)                  ;; continued string
+          (when (string=? line "")
+            (raise (exn:fail:token "EOF in multi-line string")
+                   (current-continuation-marks)
+                   strstart))
+          ;; Note: endprog must anchor the match with "^" or else
+          ;; this does not have equivalent behavior to Python.
+          (define endmatch (regexp-match-positions endprog line))
           (cond
-            [(char=? (string-ref line pos) #\space)
-             (++ column)]
-            [(char=? (string-ref line pos) #\tab)
-             (set! column (* tabsize (add1 (quotient column tabsize))))]
-            [(char=? (string-ref line pos) #\page)
-             (set! column 0)]
-            [else
-             (break)])
-          (++ pos))
-        (when (= pos max)
-          (break))
-        
-        (when (member (string-ref line pos) (list #\# #\return #\newline))
-          (cond
-            [(char=? (string-ref line pos) #\#)
-             (define comment-token (rstrip-newlines (substring line pos)))
-             (define nl-pos (+ pos (string-length comment-token)))
-             (yield COMMENT
-                    comment-token
-                    (list lnum pos)
-                    (list lnum (+ pos (string-length comment-token)))
-                    line)
-             (yield NL
-                    (substring line nl-pos)
-                    (list lnum nl-pos)
+            [endmatch
+             (set!* pos end 
+                    (cdr (first endmatch)))
+             (yield STRING
+                    (string-append contstr (substring line 0 end))
+                    strstart
+                    (list lnum end)
+                    (string-append contline  line))
+             (set! contstr "")
+             (set! needcont? #f)
+             (set! contline #f)]
+            
+            [(and needcont?
+                  (not (string=? (slice-end line 2) "\\\n"))
+                  (not (string=? (slice-end line 3) "\\\r\n")))
+             (yield ERRORTOKEN
+                    (string-append contstr line)
+                    strstart
                     (list lnum (string-length line))
-                    line)]
+                    contline)
+             (set! contstr "")
+             (set! contline #f)
+             (continue)]
+            
             [else
-             (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
-                    (string-ref line pos)
-                    (list lnum pos)
-                    (list lnum (string-length line))
-                    line)])
-          (continue))
-        
-        (when (> column (gvector-last indents))  ;; count indents or dedents
-          (gvector-add! indents column)
-          (yield INDENT
-                 (string-ref line 0 pos)
-                 (list lnum 0)
-                 (list lnum pos)
-                 line))
-        (while (< column (gvector-last indents))
-          (unless (gvector-member column indents)
-            (raise (exn:fail:indentation "unindent does not match any outer indentation level"
-                                         (current-continuation-marks)
-                                         (list "<tokenize>" lnum pos line)))
-            (my-gvector-pop! indents)
-            (yield DEDENT 
-                   ""
+             (set! contstr (string-append contstr line))
+             (set! contline (string-append contline line))
+             (continue)])]
+         
+         [(and (= parenlev 0)
+               (not continued?))                    ;; new statement
+          (when (string=? line "")
+            (break))
+          (set! column 0)
+          (while (< pos max)                        ;; measure leading whitespace
+            (cond
+              [(char=? (string-ref line pos) #\space)
+               (++ column)]
+              [(char=? (string-ref line pos) #\tab)
+               (set! column (* tabsize (add1 (quotient column tabsize))))]
+              [(char=? (string-ref line pos) #\page)
+               (set! column 0)]
+              [else
+               (break)])
+            (++ pos))
+          (when (= pos max)
+            (break))
+          
+          (when (member (string-ref line pos) (list #\# #\return #\newline))
+            (cond
+              [(char=? (string-ref line pos) #\#)
+               (define comment-token (rstrip-newlines (substring line pos)))
+               (define nl-pos (+ pos (string-length comment-token)))
+               (yield COMMENT
+                      comment-token
+                      (list lnum pos)
+                      (list lnum (+ pos (string-length comment-token)))
+                      line)
+               (yield NL
+                      (substring line nl-pos)
+                      (list lnum nl-pos)
+                      (list lnum (string-length line))
+                      line)]
+              [else
+               (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
+                      (string-ref line pos)
+                      (list lnum pos)
+                      (list lnum (string-length line))
+                      line)])
+            (continue))
+          
+          (when (> column (gvector-last indents))  ;; count indents or dedents
+            (gvector-add! indents column)
+            (yield INDENT
+                   (substring line 0 pos)
+                   (list lnum 0)
                    (list lnum pos)
-                   (list lnum pos)
-                   line)))]
-       
-       [else                                     ;; continued statement
-        (if (= (string-length line) 0)
-            (raise (exn:fail:token "EOF in multi-line statement" 
-                                   (current-continuation-marks)
-                                   (list lnum 0)))
-            (set! continued? #f))])
-     
-     (while (< pos max)
-       (void)
-       (define pseudomatch (regexp-match-positions pseudoprog line pos))
-       (cond [pseudomatch                                  ;; scan for tokens
-              (set! start (car (first pseudomatch)))
-              (set! end (cdr (first pseudomatch)))
-              (define spos (list lnum start))
-              (define epos (list lnum end))
-              (set! pos end)
-              (define token (substring line start end))
-              (define initial (string-ref line start))
-              (cond
-                [(or (set-member? initial numchars)
-                     (and (char=? initial #\.) (not (string=? token "."))))      ;; ordinary number
-                 (yield NUMBER token spos epos line)]
-                [(or (char=? initial #\return) (char=? initial #\newline))
-                 (yield (if (> parenlev 0) NL NEWLINE)
-                        token spos epos line)]
-                [(char=? initial #\#)
-                 (when (regexp-match #px"\n$" token)
-                   (error 'generate-tokens "Assertion error: token ends with newline"))
-                 (yield COMMENT token spos epos line)]
-                [(set-member? token triple-quoted)
-                 (set! endprog (hash-ref endprogs token))
-                 (define endmatch (regexp-match-positions endprog line pos))
-                 (cond
-                   [endmatch
-                    (set! pos (cdr (first endmatch)))
-                    (set! token (substring line start pos))
-                    (yield STRING token spos (list lnum pos) line)]
-                   [else
-                    (set! strstart (list lnum start))              ;; multiple lines
-                    (set! contstr (substring line start))
-                    (set! contline line)
-                    (break)])]
-                [(or (set-member? (string initial) single-quoted)
-                     (set-member? (slice-end token 2) single-quoted)
-                     (set-member? (slice-end token 3) single-quoted))
-                 ;   388                 elif initial in single_quoted or \
-                 ;   389                     token[:2] in single_quoted or \
-                 ;   390                     token[:3] in single_quoted:
-                 ;   391                     if token[-1] == '\n':                  # continued string
-                 ;   392                         strstart = (lnum, start)
-                 ;   393                         endprog = (endprogs[initial] or endprogs[token[1]] or
-                 ;   394                                    endprogs[token[2]])
-                 ;   395                         contstr, needcont? = line[start:], true
-                 ;   396                         contline = line
-                 ;   397                         break
-                 ;   398                     else:                                  # ordinary string
-                 ;   399                         yield (STRING, token, spos, epos, line)
-                 ]
-                [(set-member? initial namechars)                  ;; ordinary name
-                 (yield NAME token spos epos line)]               
-                [(char=? initial #\\)                             ;; continued stmt
-                 (set! continued? #t)]
-                [else
-                 (cond [(or (char=? initial #\() (char=? initial #\[) (char=? initial #\{))
-                        (++ parenlev)]
-                       [(or (char=? initial #\)) (char=? initial #\]) (char=? initial #\}))
-                        (-- parenlev)])
-                 (yield OP token spos epos line)])]
-             [else
-              (yield ERRORTOKEN
-                     (string-ref line pos)
+                   line))
+          (while (< column (gvector-last indents))
+            (unless (gvector-member column indents)
+              (raise (exn:fail:indentation "unindent does not match any outer indentation level"
+                                           (current-continuation-marks)
+                                           (list "<tokenize>" lnum pos line)))
+              (my-gvector-pop! indents)
+              (yield DEDENT 
+                     ""
                      (list lnum pos)
-                     (list lnum (+ pos 1))
-                     line)]))
-     
-     (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
-       (yield DEDENT
+                     (list lnum pos)
+                     line)))]
+         
+         [else                                     ;; continued statement
+          (if (= (string-length line) 0)
+              (raise (exn:fail:token "EOF in multi-line statement" 
+                                     (current-continuation-marks)
+                                     (list lnum 0)))
+              (set! continued? #f))])
+       
+       (while (< pos max)
+         (void)
+         (define pseudomatch (regexp-match-positions pseudoprog line pos))
+         (cond [pseudomatch                                  ;; scan for tokens
+                (set! start (car (first pseudomatch)))
+                (set! end (cdr (first pseudomatch)))
+                (define spos (list lnum start))
+                (define epos (list lnum end))
+                (set! pos end)
+                (define token (substring line start end))
+                (define initial (string-ref line start))
+                (cond
+                  [(or (set-member? numchars initial)
+                       (and (char=? initial #\.) (not (string=? token "."))))      ;; ordinary number
+                   (yield NUMBER token spos epos line)]
+                  [(or (char=? initial #\return) (char=? initial #\newline))
+                   (yield (if (> parenlev 0) NL NEWLINE)
+                          token spos epos line)]
+                  [(char=? initial #\#)
+                   (when (regexp-match #px"\n$" token)
+                     (error 'generate-tokens "Assertion error: token ends with newline"))
+                   (yield COMMENT token spos epos line)]
+                  [(set-member? triple-quoted token)
+                   (set! endprog (hash-ref endprogs token))
+                   (define endmatch (regexp-match-positions endprog line pos))
+                   (cond
+                     [endmatch
+                      (set! pos (cdr (first endmatch)))
+                      (set! token (substring line start pos))
+                      (yield STRING token spos (list lnum pos) line)]
+                     [else
+                      (set! strstart (list lnum start))              ;; multiple lines
+                      (set! contstr (substring line start))
+                      (set! contline line)
+                      (break)])]
+                  [(or (set-member? single-quoted (string initial))
+                       (set-member? single-quoted (slice-end token 2))
+                       (set-member? single-quoted (slice-end token 3)))
+                   (cond
+                     [(char=? (string-right-ref token 1) #\newline) ;; continued string
+                      (set! strstart (list lnum start))
+                      (set! endprog (or (hash-ref endprogs (string initial) #f)
+                                        (hash-ref endprogs (string (string-ref token 1)) #f)
+                                        (hash-ref endprogs (string (string-ref token 2)) #f)))
+                      (set! contstr (substring line start))
+                      (set! needcont? #t)
+                      (set! contline line)
+                      (break)]
+                     [else                                          ;; ordinary string
+                      (yield STRING token spos epos line)])
+                   ]
+                  [(set-member? namechars initial)                  ;; ordinary name
+                   (yield NAME token spos epos line)]               
+                  [(char=? initial #\\)                             ;; continued stmt
+                   (set! continued? #t)]
+                  [else
+                   (cond [(or (char=? initial #\() (char=? initial #\[) (char=? initial #\{))
+                          (++ parenlev)]
+                         [(or (char=? initial #\)) (char=? initial #\]) (char=? initial #\}))
+                          (-- parenlev)])
+                   (yield OP token spos epos line)])]
+               [else
+                (yield ERRORTOKEN
+                       (string-ref line pos)
+                       (list lnum pos)
+                       (list lnum (+ pos 1))
+                       line)]))
+       
+       (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
+         (yield DEDENT
+                ""
+                (list lnum 0)
+                (list lnum 0)
+                ""))
+       (yield ENDMARKER
               ""
               (list lnum 0)
               (list lnum 0)
-              ""))
-     (yield ENDMARKER
-            ""
-            (list lnum 0)
-            (list lnum 0)
-            ""))))
+              "")))))
