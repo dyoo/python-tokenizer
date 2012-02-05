@@ -484,8 +484,8 @@
          (void)
          (define pseudomatch (regexp-match-positions pseudoprog line pos))
          (cond [pseudomatch                                  ;; scan for tokens
-                (set! start (car (first pseudomatch)))
-                (set! end (cdr (first pseudomatch)))
+                (set! start (car (second pseudomatch)))
+                (set! end (cdr (second pseudomatch)))
                 (define spos (list lnum start))
                 (define epos (list lnum end))
                 (set! pos end)
