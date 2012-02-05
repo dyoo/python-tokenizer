@@ -1,6 +1,8 @@
 #lang at-exp racket/base
 
 ;; This is a translation of the tokenizer.py library from Python.
+;;
+;; Note: this translation is still buggy.  I'm working out the kinks.
 ;; 
 ;; Translation by Danny Yoo (dyoo@hashcollision.org)
 ;;
@@ -9,6 +11,29 @@
 ;;     http://hg.python.org/cpython/file/2.7/Lib/tokenize.py
 ;;
 ;; for the original Python sources.
+
+;;
+;; Comments and issues while translating the code:
+;;
+;; Racket considers characters different from length-1 strings, as a separate
+;; character type.
+;;
+;; Regexps in Racket are different than in Python in a few particulars.
+;; In character sets, particularly, control characters are significant
+;; in Racket's regexp engine.
+;;
+;; Most uses of raw strings can be substituted with uses of the @-reader.
+;; 
+;; The 'in' operator in Python is extra-flexible.  It's hard to tell sometimes
+;; what is being intended.
+;;
+;; Code that uses 'while' loops communicate values from one part of the code
+;; to the other through mutation, often in wildly distant part of the code.
+;;
+;; variable declaration in Python is nonexistant, making it difficult to see
+;; if some name is meant to be globally accessible within the tokenizer loop,
+;; or is only for temporary use.  I've tried to determine where temporaries
+;; are intended.
 
 
 (require racket/generator
@@ -95,13 +120,13 @@
   val)
 
 ;; gvector-last: (gvectorof X) -> X
-(define (gvector-last gv)
+(define (my-gvector-last gv)
   (define last-index (sub1 (gvector-count gv)))
   (gvector-ref gv last-index))
 
 
 ;; gvector-member: X (gvectorof X) -> boolean
-(define (gvector-member x gv)
+(define (my-gvector-member x gv)
   (let/ec return
     (for ([elt (in-gvector gv)])
       (when (equal? x elt)
@@ -339,9 +364,7 @@
    (define indents (gvector 0))
    (define line "")
    (define endprog #px"")
-   (let ([yield (lambda args
-                  (yield args))])
-     
+   (let ([yield-list (lambda args (yield args))])
      (while #t                          ;; loop over lines in stream
        (if (read-line-not-exhausted?) 
            (set! line (string-append (read-line) "\n")) ;; Racket's read-line does not include the newline character
@@ -363,11 +386,11 @@
             [endmatch
              (set!* pos end 
                     (cdr (first endmatch)))
-             (yield STRING
-                    (string-append contstr (substring line 0 end))
-                    strstart
-                    (list lnum end)
-                    (string-append contline  line))
+             (yield-list STRING
+                         (string-append contstr (substring line 0 end))
+                         strstart
+                         (list lnum end)
+                         (string-append contline  line))
              (set! contstr "")
              (set! needcont? #f)
              (set! contline #f)]
@@ -375,11 +398,11 @@
             [(and needcont?
                   (not (string=? (slice-end line 2) "\\\n"))
                   (not (string=? (slice-end line 3) "\\\r\n")))
-             (yield ERRORTOKEN
-                    (string-append contstr line)
-                    strstart
-                    (list lnum (string-length line))
-                    contline)
+             (yield-list ERRORTOKEN
+                         (string-append contstr line)
+                         strstart
+                         (list lnum (string-length line))
+                         contline)
              (set! contstr "")
              (set! contline #f)
              (continue)]
@@ -413,42 +436,42 @@
               [(char=? (string-ref line pos) #\#)
                (define comment-token (rstrip-newlines (substring line pos)))
                (define nl-pos (+ pos (string-length comment-token)))
-               (yield COMMENT
-                      comment-token
-                      (list lnum pos)
-                      (list lnum (+ pos (string-length comment-token)))
-                      line)
-               (yield NL
-                      (substring line nl-pos)
-                      (list lnum nl-pos)
-                      (list lnum (string-length line))
-                      line)]
+               (yield-list COMMENT
+                           comment-token
+                           (list lnum pos)
+                           (list lnum (+ pos (string-length comment-token)))
+                           line)
+               (yield-list NL
+                           (substring line nl-pos)
+                           (list lnum nl-pos)
+                           (list lnum (string-length line))
+                           line)]
               [else
-               (yield (if (char=? (string-ref line pos) #\#) COMMENT NL)
-                      (string-ref line pos)
-                      (list lnum pos)
-                      (list lnum (string-length line))
-                      line)])
+               (yield-list (if (char=? (string-ref line pos) #\#) COMMENT NL)
+                           (string (string-ref line pos))
+                           (list lnum pos)
+                           (list lnum (string-length line))
+                           line)])
             (continue))
           
-          (when (> column (gvector-last indents))  ;; count indents or dedents
+          (when (> column (my-gvector-last indents))  ;; count indents or dedents
             (gvector-add! indents column)
-            (yield INDENT
-                   (substring line 0 pos)
-                   (list lnum 0)
-                   (list lnum pos)
-                   line))
-          (while (< column (gvector-last indents))
-            (unless (gvector-member column indents)
+            (yield-list INDENT
+                        (substring line 0 pos)
+                        (list lnum 0)
+                        (list lnum pos)
+                        line))
+          (while (< column (my-gvector-last indents))
+            (unless (my-gvector-member column indents)
               (raise (exn:fail:indentation "unindent does not match any outer indentation level"
                                            (current-continuation-marks)
                                            (list "<tokenize>" lnum pos line)))
               (my-gvector-pop! indents)
-              (yield DEDENT 
-                     ""
-                     (list lnum pos)
-                     (list lnum pos)
-                     line)))]
+              (yield-list DEDENT 
+                          ""
+                          (list lnum pos)
+                          (list lnum pos)
+                          line)))]
          
          [else                                     ;; continued statement
           (if (= (string-length line) 0)
@@ -471,14 +494,14 @@
                 (cond
                   [(or (set-member? numchars initial)
                        (and (char=? initial #\.) (not (string=? token "."))))      ;; ordinary number
-                   (yield NUMBER token spos epos line)]
+                   (yield-list NUMBER token spos epos line)]
                   [(or (char=? initial #\return) (char=? initial #\newline))
-                   (yield (if (> parenlev 0) NL NEWLINE)
-                          token spos epos line)]
+                   (yield-list (if (> parenlev 0) NL NEWLINE)
+                               token spos epos line)]
                   [(char=? initial #\#)
                    (when (regexp-match #px"\n$" token)
                      (error 'generate-tokens "Assertion error: token ends with newline"))
-                   (yield COMMENT token spos epos line)]
+                   (yield-list COMMENT token spos epos line)]
                   [(set-member? triple-quoted token)
                    (set! endprog (hash-ref endprogs token))
                    (define endmatch (regexp-match-positions endprog line pos))
@@ -486,7 +509,7 @@
                      [endmatch
                       (set! pos (cdr (first endmatch)))
                       (set! token (substring line start pos))
-                      (yield STRING token spos (list lnum pos) line)]
+                      (yield-list STRING token spos (list lnum pos) line)]
                      [else
                       (set! strstart (list lnum start))              ;; multiple lines
                       (set! contstr (substring line start))
@@ -506,10 +529,10 @@
                       (set! contline line)
                       (break)]
                      [else                                          ;; ordinary string
-                      (yield STRING token spos epos line)])
+                      (yield-list STRING token spos epos line)])
                    ]
                   [(set-member? namechars initial)                  ;; ordinary name
-                   (yield NAME token spos epos line)]               
+                   (yield-list NAME token spos epos line)]               
                   [(char=? initial #\\)                             ;; continued stmt
                    (set! continued? #t)]
                   [else
@@ -517,22 +540,22 @@
                           (++ parenlev)]
                          [(or (char=? initial #\)) (char=? initial #\]) (char=? initial #\}))
                           (-- parenlev)])
-                   (yield OP token spos epos line)])]
+                   (yield-list OP token spos epos line)])]
                [else
-                (yield ERRORTOKEN
-                       (string-ref line pos)
-                       (list lnum pos)
-                       (list lnum (+ pos 1))
-                       line)]))
+                (yield-list ERRORTOKEN
+                            (string-ref line pos)
+                            (list lnum pos)
+                            (list lnum (+ pos 1))
+                            line)]))
        
        (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
-         (yield DEDENT
-                ""
-                (list lnum 0)
-                (list lnum 0)
-                ""))
-       (yield ENDMARKER
-              ""
-              (list lnum 0)
-              (list lnum 0)
-              "")))))
+         (yield-list DEDENT
+                     ""
+                     (list lnum 0)
+                     (list lnum 0)
+                     ""))
+       (yield-list ENDMARKER
+                   ""
+                   (list lnum 0)
+                   (list lnum 0)
+                   "")))))
