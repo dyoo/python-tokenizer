@@ -559,3 +559,14 @@
                    (list lnum 0)
                    (list lnum 0)
                    "")))))
+
+
+
+(define (exercising)
+  (sequence->list (generate-tokens (in-lines (open-input-string "
+def f(x):
+    return x * x
+    r'''hi, this is
+a test
+'''
+")))))
