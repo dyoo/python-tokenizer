@@ -254,8 +254,8 @@
         @r{"} (pregexp (string-append "^" Double))
         @r{'''} single3prog
         @r{"""} double3prog
-        @r{'''} single3prog
-        @r{"""} double3prog
+        @r{r'''} single3prog
+        @r{r"""} double3prog
         @r{u'''} single3prog
         @r{u"""} double3prog
         @r{ur'''} single3prog
