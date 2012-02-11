@@ -45,6 +45,8 @@
          (for-syntax racket/base)
          (planet dyoo/while-loop))
 
+(provide generate-tokens)
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Helper macros:
@@ -321,14 +323,28 @@
 ;; One of the nasty things is to see how much state's involved in
 ;; tokenization.  In the original sources, it's a bit hard to tell 
 ;; what all the lexer's state is, since variables are function-scoped.
+;;
+;;
+
+
+;; in-lines/preserve-newlines: input-port -> sequence
+;; Like in-lines, but maintains the newline character, as in Python.
+(define (in-lines/preserve-newlines ip)
+  (in-generator
+   (let loop ()
+     (define a-match (regexp-match #px"^([^\r\n]*)(\r\n|\n|\r|$)"
+                                   ip))
+     (when (and a-match (not (bytes=? (first a-match) #"")))
+       (yield (bytes->string/utf-8 (first a-match)))
+       (loop)))))
 
 
 
-;; generate-tokens: sequence -> sequence
-(define (generate-tokens line-sequence)
+;; generate-tokens: input-port -> sequence
+(define (generate-tokens ip)
   #|
-        The generate_tokens sequence requires one argument, line-sequence, which
-        must be a sequence-like object.
+        The generate_tokens sequence requires one argument, ip, which
+        must be an input port.
     
         The returned sequence produces 5-tuples with these members: the token type; the
         token string; a 2-tuple (srow, scol) of ints specifying the row and
@@ -343,7 +359,7 @@
    ;; The idiom for reading from a sequence in Racket doesn't use
    ;; "it's easier to ask forgiveness than permission".
    (define-values (read-line-not-exhausted? read-line) 
-     (sequence-generate line-sequence))
+     (sequence-generate (in-lines/preserve-newlines ip)))
    
    (define lnum 0)
    (define strstart (list 0 0))
@@ -367,7 +383,7 @@
    (let ([yield-list (lambda args (yield args))])
      (while #t                          ;; loop over lines in stream
        (if (read-line-not-exhausted?) 
-           (set! line (string-append (read-line) "\n")) ;; Racket's read-line does not include the newline character
+           (set! line (read-line))
            (set! line ""))
        (++ lnum)
        (set! pos 0)
@@ -563,10 +579,10 @@
 
 
 (define (exercising)
-  (sequence->list (generate-tokens (in-lines (open-input-string "
+  (sequence->list (generate-tokens (open-input-string "
 def f(x):
     return x * x
     r'''hi, this is
 a test
 '''
-")))))
+"))))
