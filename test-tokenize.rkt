@@ -5,8 +5,8 @@
          racket/sequence
          racket/generator)
 
-;; This should include some of test test cases from Python's test/test_tokenize.py file.
-;; Does not include the round-tripping.
+;; This includes some of test cases extracted from Python's
+;; test/test_tokenize.py file.
 
 (define (dump-tokens s)
   (sequence->list
@@ -18,7 +18,6 @@
               (break)]
              [(list type text start end rest)
               (yield (list type text start end))]))))))
-
 
 
 (check-equal? (dump-tokens "1 + 1")
@@ -43,6 +42,7 @@
                 (COMMENT    "# NEWLINE"   (3 17) (3 26))
                 (NEWLINE    "\n"         (3 26) (3 27))
                 (DEDENT     ""            (4 0) (4 0))))
+
 
 
 (define foo #<<EOF
