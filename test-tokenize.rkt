@@ -20,10 +20,10 @@
               (yield (list type text start end))]))))))
 
 
-;(check-equal? (dump-tokens "1 + 1")
-;              '((NUMBER "1" (1 0) (1 1))
-;                (OP "+" (1 2) (1 3))
-;                (NUMBER "1" (1 4) (1 5))))
+(check-equal? (dump-tokens "1 + 1")
+              '((NUMBER "1" (1 0) (1 1))
+                (OP "+" (1 2) (1 3))
+                (NUMBER "1" (1 4) (1 5))))
                         
 
 (check-equal? (dump-tokens (string-append "if False:\n"
