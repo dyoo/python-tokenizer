@@ -384,6 +384,7 @@
    (define endprog #px"")
    (let ([yield-list (lambda args (yield args))])
      (while #t                          ;; loop over lines in stream
+       (printf "beginning of loop\n")
        (if (read-line-not-exhausted?) 
            (set! line (read-line))
            (set! line ""))
@@ -448,7 +449,7 @@
             (++ pos))
           (when (= pos max)
             (break))
-          
+
           (when (member (string-ref line pos) (list #\# #\return #\newline))
             (cond
               [(char=? (string-ref line pos) #\#)
@@ -470,6 +471,7 @@
                            (list lnum pos)
                            (list lnum (string-length line))
                            line)])
+            (printf "continuing...\n")
             (continue))
           
           (when (> column (my-gvector-last indents))  ;; count indents or dedents
