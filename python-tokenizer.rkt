@@ -384,7 +384,6 @@
    (define endprog #px"")
    (let ([yield-list (lambda args (yield args))])
      (while #t                          ;; loop over lines in stream
-       (printf "beginning of loop\n")
        (if (read-line-not-exhausted?) 
            (set! line (read-line))
            (set! line ""))
@@ -471,7 +470,6 @@
                            (list lnum pos)
                            (list lnum (string-length line))
                            line)])
-            (printf "continuing...\n")
             (continue))
           
           (when (> column (my-gvector-last indents))  ;; count indents or dedents
@@ -499,9 +497,9 @@
                                      (current-continuation-marks)
                                      (list lnum 0)))
               (set! continued? #f))])
-       
+
+
        (while (< pos max)
-         (void)
          (define pseudomatch (regexp-match-positions pseudoprog line pos))
          (cond [pseudomatch                                  ;; scan for tokens
                 (set! start (car (second pseudomatch)))
@@ -566,19 +564,19 @@
                             (string-ref line pos)
                             (list lnum pos)
                             (list lnum (+ pos 1))
-                            line)]))
-       
-       (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
-         (yield-list DEDENT
-                     ""
-                     (list lnum 0)
-                     (list lnum 0)
-                     ""))
-       (yield-list ENDMARKER
-                   ""
-                   (list lnum 0)
-                   (list lnum 0)
-                   "")))))
+                            line)])))
+     
+     (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
+          (yield-list DEDENT
+                      ""
+                      (list lnum 0)
+                      (list lnum 0)
+                      ""))
+     (yield-list ENDMARKER
+                 ""
+                 (list lnum 0)
+                 (list lnum 0)
+                 ""))))
 
 
 
