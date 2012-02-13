@@ -45,7 +45,9 @@
          (for-syntax racket/base)
          (planet dyoo/while-loop))
 
-(provide generate-tokens)
+(provide generate-tokens
+         (struct-out exn:fail:token)
+         (struct-out exn:fail:indentation))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -44,118 +44,40 @@
                 (DEDENT     ""            (4 0) (4 0))))
 
 
+(check-exn exn:fail:indentation?
+           (lambda ()
+             (dump-tokens #<<EOF
+def k(x):
+    x += 2
+  x += 5
+EOF
+)))
 
+
+;; Ordinary integers and binary operators
+(check-equal? (dump-tokens "0xff <= 255")
+              '((NUMBER "0xff"  (1 0) (1 4))
+                (OP     "<="    (1 5) (1 7))
+                (NUMBER "255"   (1 8) (1 11))))
+
+(check-equal? (dump-tokens "0b10 <= 255")
+              '((NUMBER     "0b10"        (1 0) (1 4))
+                (OP         "<="          (1 5) (1 7))
+                (NUMBER     "255"         (1 8) (1 11))))
+
+(check-equal? (dump-tokens "0o123 <= 0123")
+              '((    NUMBER     "0o123"       (1 0) (1 5))
+                (OP         "<="          (1 6) (1 8))
+                (NUMBER     "0123"        (1 9) (1 13))))
+
+(check-equal? (dump-tokens "01234567 > ~0x15")
+              '((    NUMBER  "01234567"    (1 0) (1 8))
+                (OP         ">"           (1 9) (1 10))
+                (OP         "~"           (1 11) (1 12))
+                (NUMBER     "0x15"        (1 12) (1 16))))
+                                
+              
 (define foo #<<EOF
-    >>> indent_error_file = \"""
-    ... def k(x):
-    ...     x += 2
-    ...   x += 5
-    ... \"""
-
-    >>> for tok in generate_tokens(StringIO(indent_error_file).readline): pass
-    Traceback (most recent call last):
-        ...
-    IndentationError: unindent does not match any outer indentation level
-
-Test roundtrip for `untokenize`. `f` is an open file or a string. The source
-code in f is tokenized, converted back to source code via tokenize.untokenize(),
-and tokenized again from the latter. The test fails if the second tokenization
-doesn't match the first.
-
-    >>> def roundtrip(f):
-    ...     if isinstance(f, str): f = StringIO(f)
-    ...     token_list = list(generate_tokens(f.readline))
-    ...     f.close()
-    ...     tokens1 = [tok[:2] for tok in token_list]
-    ...     new_text = untokenize(tokens1)
-    ...     readline = iter(new_text.splitlines(1)).next
-    ...     tokens2 = [tok[:2] for tok in generate_tokens(readline)]
-    ...     return tokens1 == tokens2
-    ...
-
-There are some standard formatting practices that are easy to get right.
-
-    >>> roundtrip("if x == 1:\\n"
-    ...           "    print x\\n")
-    True
-
-    >>> roundtrip("# This is a comment\\n# This also")
-    True
-
-Some people use different formatting conventions, which makes
-untokenize a little trickier. Note that this test involves trailing
-whitespace after the colon. Note that we use hex escapes to make the
-two trailing blanks apperant in the expected output.
-
-    >>> roundtrip("if x == 1 : \\n"
-    ...           "  print x\\n")
-    True
-
-    >>> f = test_support.findfile("tokenize_tests" + os.extsep + "txt")
-    >>> roundtrip(open(f))
-    True
-
-    >>> roundtrip("if x == 1:\\n"
-    ...           "    # A comment by itself.\\n"
-    ...           "    print x # Comment here, too.\\n"
-    ...           "    # Another comment.\\n"
-    ...           "after_if = True\\n")
-    True
-
-    >>> roundtrip("if (x # The comments need to go in the right place\\n"
-    ...           "    == 1):\\n"
-    ...           "    print 'x==1'\\n")
-    True
-
-    >>> roundtrip("class Test: # A comment here\\n"
-    ...           "  # A comment with weird indent\\n"
-    ...           "  after_com = 5\\n"
-    ...           "  def x(m): return m*5 # a one liner\\n"
-    ...           "  def y(m): # A whitespace after the colon\\n"
-    ...           "     return y*4 # 3-space indent\\n")
-    True
-
-Some error-handling code
-
-    >>> roundtrip("try: import somemodule\\n"
-    ...           "except ImportError: # comment\\n"
-    ...           "    print 'Can not import' # comment2\\n"
-    ...           "else:   print 'Loaded'\\n")
-    True
-
-Balancing continuation
-
-    >>> roundtrip("a = (3,4, \\n"
-    ...           "5,6)\\n"
-    ...           "y = [3, 4,\\n"
-    ...           "5]\\n"
-    ...           "z = {'a': 5,\\n"
-    ...           "'b':15, 'c':True}\\n"
-    ...           "x = len(y) + 5 - a[\\n"
-    ...           "3] - a[2]\\n"
-    ...           "+ len(z) - z[\\n"
-    ...           "'b']\\n")
-    True
-
-Ordinary integers and binary operators
-
-    >>> dump_tokens("0xff <= 255")
-    NUMBER     '0xff'        (1, 0) (1, 4)
-    OP         '<='          (1, 5) (1, 7)
-    NUMBER     '255'         (1, 8) (1, 11)
-    >>> dump_tokens("0b10 <= 255")
-    NUMBER     '0b10'        (1, 0) (1, 4)
-    OP         '<='          (1, 5) (1, 7)
-    NUMBER     '255'         (1, 8) (1, 11)
-    >>> dump_tokens("0o123 <= 0123")
-    NUMBER     '0o123'       (1, 0) (1, 5)
-    OP         '<='          (1, 6) (1, 8)
-    NUMBER     '0123'        (1, 9) (1, 13)
-    >>> dump_tokens("01234567 > ~0x15")
-    NUMBER     '01234567'    (1, 0) (1, 8)
-    OP         '>'           (1, 9) (1, 10)
-    OP         '~'           (1, 11) (1, 12)
-    NUMBER     '0x15'        (1, 12) (1, 16)
     >>> dump_tokens("2134568 != 01231515")
     NUMBER     '2134568'     (1, 0) (1, 7)
     OP         '!='          (1, 8) (1, 10)
