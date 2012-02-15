@@ -44,7 +44,6 @@
                 (DEDENT     ""            (4 0) (4 0))))
 
 
-(exit)
 
 (check-exn exn:fail:indentation?
            (lambda ()
