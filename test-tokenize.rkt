@@ -6,7 +6,12 @@
          racket/generator)
 
 ;; This includes some of test cases extracted from Python's
-;; test/test_tokenize.py file.
+;; test/test_tokenize.py file, though it doesn't currently
+;; include the round-tripping tests that the original source included.
+;;
+;; One other difference is that we're using Racket rackunit rather
+;; than Python's doctest.  It would be nice if someone ported over a
+;; doctest equivalent.
 
 (define (dump-tokens s)
   (sequence->list
