@@ -109,61 +109,75 @@ EOF
                 (NUMBER     "1234"        (1 14) (1 18))))
 
 
-              
+
+;; Long integers
+(check-equal? (dump-tokens "x = 0L")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "0L"          (1 4) (1 6))))
+
+;; Note: the tests at this point in the original Python source look
+;; somewhat corrupted.  I need to follow up and see if that's still
+;; the case in the original Python sources, or if something really
+;; weird has happened.
+;;
+;; Ah, ok.  the dump_tokens in Python's version of the tests truncate
+;; the text of the token.  Strange.
+
+(check-equal? (dump-tokens "x = 0xfffffffffff")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "0xfffffffffff" (1 4) (1 17))))
+
+(check-equal? (dump-tokens "x = 123141242151251616110l")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "123141242151251616110l" (1 4) (1 26))))
+
+(check-equal? (dump-tokens "x = -15921590215012591L")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (OP         "-"           (1 4) (1 5))
+                (NUMBER     "15921590215012591L" (1 5) (1 23))))
+
+
+
+;; Floating point numbers
+(check-equal? (dump-tokens "x = 3.14159")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "3.14159"     (1 4) (1 11))))
+(check-equal? (dump-tokens "x = 314159.")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "314159."     (1 4) (1 11))))
+(check-equal? (dump-tokens "x = .314159")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     ".314159"     (1 4) (1 11))))
+(check-equal? (dump-tokens "x = 3e14159")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "3e14159"     (1 4) (1 11))))
+(check-equal? (dump-tokens "x = 3E123")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "3E123"       (1 4) (1 9))))
+(check-equal? (dump-tokens "x+y = 3e-1230")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "+"           (1 1) (1 2))
+                (NAME       "y"           (1 2) (1 3))
+                (OP         "="           (1 4) (1 5))
+                (NUMBER     "3e-1230"     (1 6) (1 13))))
+(check-equal? (dump-tokens "x = 3.14e159")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (NUMBER     "3.14e159"    (1 4) (1 12))))
+
+
+
+
 (define foo #<<EOF
-
-Long integers
-
-    >>> dump_tokens("x = 0L")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '0L'          (1, 4) (1, 6)
-    >>> dump_tokens("x = 0xfffffffffff")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '0xffffffffff (1, 4) (1, 17)
-    >>> dump_tokens("x = 123141242151251616110l")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '123141242151 (1, 4) (1, 26)
-    >>> dump_tokens("x = -15921590215012591L")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    OP         '-'           (1, 4) (1, 5)
-    NUMBER     '159215902150 (1, 5) (1, 23)
-
-Floating point numbers
-
-    >>> dump_tokens("x = 3.14159")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '3.14159'     (1, 4) (1, 11)
-    >>> dump_tokens("x = 314159.")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '314159.'     (1, 4) (1, 11)
-    >>> dump_tokens("x = .314159")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '.314159'     (1, 4) (1, 11)
-    >>> dump_tokens("x = 3e14159")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '3e14159'     (1, 4) (1, 11)
-    >>> dump_tokens("x = 3E123")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '3E123'       (1, 4) (1, 9)
-    >>> dump_tokens("x+y = 3e-1230")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '+'           (1, 1) (1, 2)
-    NAME       'y'           (1, 2) (1, 3)
-    OP         '='           (1, 4) (1, 5)
-    NUMBER     '3e-1230'     (1, 6) (1, 13)
-    >>> dump_tokens("x = 3.14e159")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    NUMBER     '3.14e159'    (1, 4) (1, 12)
 
 String literals
 
