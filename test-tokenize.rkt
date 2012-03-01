@@ -200,15 +200,13 @@ EOF
                 (NAME       "y"           (1 9) (1 10))
                 (OP         "="           (1 11) (1 12))
                 (STRING     "\"'\""       (1 13) (1 16))))
-
-
+(check-equal? (dump-tokens "x = \"doesn't \"shrink\", does it\"")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (STRING     "\"doesn't \"" (1 4) (1 14))
+                (NAME       "shrink"      (1 14) (1 20))
+                (STRING     "\", does it\"" (1 20) (1 31))))
 (define foo #<<EOF
-    >>> dump_tokens("x = \\\"doesn't \\\"shrink\\\", does it\\\"")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    STRING     '"doesn\\'t "' (1, 4) (1, 14)
-    NAME       'shrink'      (1, 14) (1, 20)
-    STRING     '", does it"' (1, 20) (1, 31)
     >>> dump_tokens("x = u'abc' + U'ABC'")
     NAME       'x'           (1, 0) (1, 1)
     OP         '='           (1, 2) (1, 3)
