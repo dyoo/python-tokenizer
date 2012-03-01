@@ -123,6 +123,16 @@ uses of the
 @link["http://docs.racket-lang.org/scribble/reader-internals.html#(mod-path._at-exp)"]{at-exp}
 reader.}
 
+
+@item{Generators in Racket and in Python are pretty similar, though
+the Racket documentation can do a better job in documenting them.
+
+When dealing with generators in Racket, what one really wants to
+usually produce is a generic @tech{sequence}.  For that reason, the
+documentation really needs to place more emphasis in 
+@racket[in-generator], not the raw @racket[generator] form.}
+
+
 @item{Python heavily overloads the @tt{in} operator.  Its expressivity
 makes it easy to write code with it.  On the flip side, its
 flexibility makes it a little harder to know what it actually means.}
