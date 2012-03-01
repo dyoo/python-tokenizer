@@ -10,7 +10,7 @@
 @(myeval '(require racket/list))
 
 @title{python-tokenizer: a translation of Python's @tt{tokenize.py} library for Racket}
-@author+email["Danny Yoo" "hashcollision.org"]
+@author+email["Danny Yoo" "dyoo@hashcollision.org"]
 
 This is a fairly close translation of the
 @link["http://hg.python.org/cpython/file/2.7/Lib/tokenize.py"]{@tt{tokenize.py}}
