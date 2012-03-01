@@ -547,8 +547,7 @@
                       (set! contline line)
                       (break)]
                      [else                                          ;; ordinary string
-                      (yield-list STRING token spos epos line)])
-                   ]
+                      (yield-list STRING token spos epos line)])]
                   [(set-member? namechars initial)                  ;; ordinary name
                    (yield-list NAME token spos epos line)]               
                   [(char=? initial #\\)                             ;; continued stmt
@@ -564,7 +563,8 @@
                             (string-ref line pos)
                             (list lnum pos)
                             (list lnum (+ pos 1))
-                            line)])))
+                            line)
+                (++ pos)])))
      
      (for ([indent (sequence-tail indents 1)]) ;; pop remaining indent levels
           (yield-list DEDENT

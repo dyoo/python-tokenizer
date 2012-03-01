@@ -5,6 +5,9 @@
          racket/sequence
          racket/generator)
 
+;; Most of this is translated from:
+;; http://hg.python.org/cpython/file/2.7/Lib/test/test_tokenize.py
+
 ;; This includes some of test cases extracted from Python's
 ;; test/test_tokenize.py file, though it doesn't currently
 ;; include the round-tripping tests that the original source included.
@@ -175,28 +178,31 @@ EOF
                 (NUMBER     "3.14e159"    (1 4) (1 12))))
 
 
+;; String literals
+;;
+;; dyoo: the doctests involving quotes embedded in the string literals
+;; are adding additional backslashes that I don't quite understand.
+;; I've needed to hand-massage the test inputs and outputs to what I
+;; think are the intention.
+(check-equal? (dump-tokens "x = ''; y = \"\"")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (STRING     "''"          (1 4) (1 6))
+                (OP         ";"           (1 6) (1 7))
+                (NAME       "y"           (1 8) (1 9))
+                (OP         "="           (1 10) (1 11))
+                (STRING     "\"\""        (1 12) (1 14))))
+(check-equal? (dump-tokens "x = '\"'; y = \"'\"")
+              '((NAME       "x"           (1 0) (1 1))
+                (OP         "="           (1 2) (1 3))
+                (STRING     "'\"'"        (1 4) (1 7))
+                (OP         ";"           (1 7) (1 8))
+                (NAME       "y"           (1 9) (1 10))
+                (OP         "="           (1 11) (1 12))
+                (STRING     "\"'\""       (1 13) (1 16))))
 
 
 (define foo #<<EOF
-
-String literals
-
-    >>> dump_tokens("x = ''; y = \\\"\\\"")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    STRING     "''"          (1, 4) (1, 6)
-    OP         ';'           (1, 6) (1, 7)
-    NAME       'y'           (1, 8) (1, 9)
-    OP         '='           (1, 10) (1, 11)
-    STRING     '""'          (1, 12) (1, 14)
-    >>> dump_tokens("x = '\\\"'; y = \\\"'\\\"")
-    NAME       'x'           (1, 0) (1, 1)
-    OP         '='           (1, 2) (1, 3)
-    STRING     '\\'"\\''       (1, 4) (1, 7)
-    OP         ';'           (1, 7) (1, 8)
-    NAME       'y'           (1, 9) (1, 10)
-    OP         '='           (1, 11) (1, 12)
-    STRING     '"\\'"'        (1, 13) (1, 16)
     >>> dump_tokens("x = \\\"doesn't \\\"shrink\\\", does it\\\"")
     NAME       'x'           (1, 0) (1, 1)
     OP         '='           (1, 2) (1, 3)
