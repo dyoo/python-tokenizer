@@ -2,8 +2,6 @@
 
 ;; This is a translation of the tokenizer.py library from Python.
 ;;
-;; Note: this translation is still buggy.  I'm working out the kinks.
-;; 
 ;; Translation by Danny Yoo (dyoo@hashcollision.org)
 ;;
 ;; See:
