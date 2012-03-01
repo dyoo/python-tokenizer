@@ -56,6 +56,9 @@ if the indentation level is at @racket[0].}
 @item{current-line: the current line that the tokenizer is on}
 ]
 
+The last token produced, under normal circumstances, will be
+@racket['ENDMARKER].
+
 
 If a recoverable error occurs, @racket[generate-tokens] will produce
 single-character tokens with the @racket['ERRORTOKEN] type until it
@@ -67,11 +70,12 @@ indentation level is inconsistent.  On an unrecoverable error, an
 @racket[exn:fail:token] or @racket[exn:fail:indentation] error
 will be raised.
 
-@defstruct[(exn:fail:token exn:fail) [loc (list/c number number)]]{
+@defstruct[(exn:fail:token exn:fail) ([loc (list/c number number)])]{
 Raised when @racket[eof] is unexpectedly encounted.
 @racket[exn:fail:token-loc] holds the start position.
 }
-@defstruct[(exn:fail:indentation exn:fail) [loc (list/c number number)]]{
+
+@defstruct[(exn:fail:indentation exn:fail) ([loc (list/c number number)])]{
 Raised when the indentation is inconsistent.
 @racket[exn:fail:indentation-loc] holds the start position.
 }
@@ -106,9 +110,7 @@ values from one part of the code to others through mutation, often in
 wildly distant locations.}
 
 
-@item{It's a little more easy to see what variables are intended to be
-locally-scoped temporary variables in Racket by inspection.  Racket
-makes a syntactic distinction between variable definition
+@item{Racket makes a syntactic distinction between variable definition
 (@racket[define]) and mutation (@racket[set!]).  I've had to deduce
 which variables were intended to be temporaries, and hopefully I
 haven't induced any errors along the way.}
@@ -129,7 +131,7 @@ the Racket documentation can do a better job in documenting them.
 
 When dealing with generators in Racket, what one really wants to
 usually produce is a generic @tech{sequence}.  For that reason, the
-documentation really needs to place more emphasis in 
+Racket documentation really needs to place more emphasis in 
 @racket[in-generator], not the raw @racket[generator] form.}
 
 
@@ -137,11 +139,12 @@ documentation really needs to place more emphasis in
 makes it easy to write code with it.  On the flip side, its
 flexibility makes it a little harder to know what it actually means.}
 
-@item{Regular expressions are slightly different, but on the whole
-match well between the two languages.  Minor differences in the syntax
-are potholes: Racket's regular expression matcher does not have an
-implicit @emph{begin} anchor, and Racket's regexps are more sensitive
-to escape characters.
+@item{Regular expressions, on the whole, match
+@; Yeah, that's a pun.  I had to get that in somewhere... :)
+well between the two
+languages.  Minor differences in the syntax are potholes: Racket's
+regular expression matcher does not have an implicit @emph{begin}
+anchor, and Racket's regexps are more sensitive to escape characters.
 
 Python's regexp engine returns a single match object that can support
 different operators.  Racket, on the other hand, requires the user to
