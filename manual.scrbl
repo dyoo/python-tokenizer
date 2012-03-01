@@ -17,7 +17,7 @@ This is a fairly close translation of the
 library from @link["http://python.org"]{Python}.
 
 The main function, @racket[generate-tokens], consumes an input port
-and produces a @tech{sequence} of tokens.
+and produces a sequence of tokens.
 
 For example:
 
@@ -64,11 +64,12 @@ If a recoverable error occurs, @racket[generate-tokens] will produce
 single-character tokens with the @racket['ERRORTOKEN] type until it
 can recover.
 
-Unrecoverable errors occurs when the tokenizer encounters @racket[eof]
+Unrecoverable errors occur when the tokenizer encounters @racket[eof]
 in the middle of a multi-line string or statement, or if an
-indentation level is inconsistent.  On an unrecoverable error, an
-@racket[exn:fail:token] or @racket[exn:fail:indentation] error
-will be raised.
+indentation level is inconsistent.  On an unrecoverable error,
+@racket[generate-tokesn] will raise an @racket[exn:fail:token] or
+@racket[exn:fail:indentation] error.
+
 
 @defstruct[(exn:fail:token exn:fail) ([loc (list/c number number)])]{
 Raised when @racket[eof] is unexpectedly encounted.
@@ -116,9 +117,9 @@ which variables were intended to be temporaries, and hopefully I
 haven't induced any errors along the way.}
 
 @item{In some cases, Racket has finer-grained type distinctions than
-Python.  Python has no type to represent individual characters, and
-instead uses a length-1 string.  In this translation, I've used
-characters where I think they're appropriate.}
+Python.  Python does not use a separate type to represent individual
+characters, and instead uses a length-1 string.  In this translation,
+I've used characters where I think they're appropriate.}
 
 @item{Most uses of raw strings in Python can be translated to
 uses of the
@@ -130,7 +131,7 @@ reader.}
 the Racket documentation can do a better job in documenting them.
 
 When dealing with generators in Racket, what one really wants to
-usually produce is a generic @tech{sequence}.  For that reason, the
+usually produce is a generic sequence.  For that reason, the
 Racket documentation really needs to place more emphasis in 
 @racket[in-generator], not the raw @racket[generator] form.}
 
