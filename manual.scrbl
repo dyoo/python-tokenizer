@@ -95,7 +95,7 @@ loops communicate values from one part of the code to the other
 through mutation, often in wildly distant parts.}
 
 
-@link{It's a little more easy to see what variables are intended to be
+@item{It's a little more easy to see what variables are intended to be
 locally-scoped temporary variables in Racket because there's a
 difference between @racket[define] and @racket[set!].  I've had to
 induce which variables were intended to be temporaries, and hopefully
