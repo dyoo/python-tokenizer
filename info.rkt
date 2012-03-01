@@ -9,5 +9,5 @@
 (define primary-file "main.rkt")
 (define blurb 
   '("python-tokenizer: a translation of Python's @tt{tokenize.py} library for Racket"))
-(define release-note
+(define release-notes
   '((p "First release.")))
