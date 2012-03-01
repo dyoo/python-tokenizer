@@ -110,6 +110,12 @@
              (max (- (string-length str) n)
                   0)))
 
+;; slice-front: string number -> string
+;; Slice from the beginning of a string.
+(define (slice-front str n)
+  (substring str 0 (min n (string-length str))))
+
+
 ;; rstrip-newlines: string -> string
 ;; Trim off the newline characters off a string.
 (define (rstrip-newlines s)
@@ -534,8 +540,8 @@
                       (set! contline line)
                       (break)])]
                   [(or (set-member? single-quoted (string initial))
-                       (set-member? single-quoted (slice-end token 2))
-                       (set-member? single-quoted (slice-end token 3)))
+                       (set-member? single-quoted (slice-front token 2))
+                       (set-member? single-quoted (slice-front token 3)))
                    (cond
                      [(char=? (string-right-ref token 1) #\newline) ;; continued string
                       (set! strstart (list lnum start))
