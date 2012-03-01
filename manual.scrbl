@@ -67,7 +67,19 @@ indentation level is inconsistent.  On an unrecoverable error, an
 @racket[exn:fail:token] or @racket[exn:fail:indentation] error
 will be raised.
 
+@defstruct[(exn:fail:token exn:fail) [loc (list/c number number)]]{
+Raised when @racket[eof] is unexpectedly encounted.
+@racket[exn:fail:token-loc] holds the start position.
 }
+@defstruct[(exn:fail:indentation exn:fail) [loc (list/c number number)]]{
+Raised when the indentation is inconsistent.
+@racket[exn:fail:indentation-loc] holds the start position.
+}
+
+}
+
+
+
 
 
 
@@ -97,7 +109,7 @@ wildly distant locations.}
 @item{It's a little more easy to see what variables are intended to be
 locally-scoped temporary variables in Racket by inspection.  Racket
 makes a syntactic distinction between variable definition
-(@racket[define]) and mutation (@racket[set!]).  I've had to induce
+(@racket[define]) and mutation (@racket[set!]).  I've had to deduce
 which variables were intended to be temporaries, and hopefully I
 haven't induced any errors along the way.}
 
