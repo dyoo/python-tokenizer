@@ -120,7 +120,7 @@ means.}
 match well between the two languages.  Minor differences in the syntax
 are potholes: Racket's regular expression matcher does not have an
 implicit @emph{begin} anchor, and Racket's regexps are more sensitive
-to escape characters.}
+to escape characters.
 
 One distinction is that Python includes a single match value that
 supports different operators, whereas Racket requires the user to
