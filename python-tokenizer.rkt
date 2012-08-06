@@ -487,13 +487,13 @@
             (unless (my-gvector-member column indents)
               (raise (exn:fail:indentation "unindent does not match any outer indentation level"
                                            (current-continuation-marks)
-                                           (list "<tokenize>" lnum pos line)))
-              (my-gvector-pop! indents)
-              (yield-list DEDENT 
-                          ""
-                          (list lnum pos)
-                          (list lnum pos)
-                          line)))]
+                                           (list "<tokenize>" lnum pos line))))
+            (my-gvector-pop! indents)
+            (yield-list DEDENT 
+                        ""
+                        (list lnum pos)
+                        (list lnum pos)
+                        line))]
          
          [else                                     ;; continued statement
           (if (= (string-length line) 0)
