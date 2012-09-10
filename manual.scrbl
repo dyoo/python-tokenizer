@@ -89,7 +89,7 @@ Raised when the indentation is inconsistent.
 
 
 
-@section{Translator Comments}
+@section{Translator comments}
 
 The translation is a fairly direct one; I wrote an
 @link["https://github.com/dyoo/while-loop"]{auxiliary package} to deal
@@ -153,3 +153,12 @@ select between getting the position of the match, with
 @racket[regexp-match-positions], or getting the textual content with
 @racket[regexp-match].}
 ]
+
+
+@section{Release history}
+@itemlist[
+         
+          @item{1.0 (2012-02-29): Initial release.}
+           
+           @item{1.1 (2012-09-10): Corrected an infinite-loop bug due to mis-typing a paren.  Thanks to Joe Politz for the bug report!}
+          ]
