@@ -160,5 +160,5 @@ select between getting the position of the match, with
          
           @item{1.0 (2012-02-29): Initial release.}
            
-           @item{1.1 (2012-09-10): Corrected an infinite-loop bug due to mis-typing a paren.  Thanks to Joe Politz for the bug report!}
+           @item{1.1 (2012-09-10): Bug fix.  Corrected an infinite-loop bug due to mis-typing a paren.  Thanks to Joe Politz for the bug report!}
           ]
